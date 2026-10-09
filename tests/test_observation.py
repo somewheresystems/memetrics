@@ -53,3 +53,15 @@ def test_confusion_and_breakdown_shapes():
     c = ob.confusion(df)
     assert np.allclose(c.sum(axis=1), 1)
     assert ob.breakdown_fraction(df) == 0.5
+
+
+def test_n1_histories_ignore_later_likes():
+    # engagement histories must not change when posts gain likes after the focal post's time
+    log = ob.simulate("replicator", p_private=0.0, seed=3, params=SMALL)
+    obs = ob.observe(log, "explicit", deletion=0.0)
+    late = obs.copy()
+    last = late.step >= late.step.max() - 4  # windows not closed before any later post
+    late.loc[last, "engagement"] = late.loc[last, "engagement"] + 50
+    a = ob._lagged(obs.step.to_numpy(), obs.author.to_numpy(), obs.engagement.to_numpy(float), 5)
+    b = ob._lagged(late.step.to_numpy(), late.author.to_numpy(), late.engagement.to_numpy(float), 5)
+    assert (a[0] == b[0]).all() and np.allclose(a[1], b[1])

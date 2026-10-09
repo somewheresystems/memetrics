@@ -25,7 +25,8 @@ Observation layers
   trending pool (a toy engagement ranker). False gives a chronological followee feed. The ranker changes the
   world itself: who sees what.
 - exposure censoring: impressions are never part of the observed table.
-- ``deletion``: each public post is deleted with this probability, doubled in the bottom engagement quartile.
+- ``deletion``: each public post is deleted with this probability, doubled in the bottom engagement quartile (a
+  quarter of public posts; ties at zero likes are broken at random).
 - ``edge_mode``: how observed parents are formed. ``explicit``: the true parent if it is observed, else no edge
   (as a quote of a deleted or private post). ``ancestor``: the nearest observed ancestor (thinned chains).
   ``inferred``: the most similar earlier observed instance (time-ordered guess).
@@ -320,8 +321,12 @@ def observe(
     pub_share = np.where(tot > 0, d.likes_public / np.maximum(tot, 1), 0)
     d["engagement"] = np.round(within * pub_share).astype(float)
     rng = np.random.default_rng(seed)
-    q25 = np.quantile(d.engagement[~d.private], 0.25) if (~d.private).any() else 0
-    pdel = np.where(d.engagement <= q25, 2 * deletion, deletion)
+    # bottom engagement quartile of public posts, ties broken at random (many posts have zero likes)
+    pub = np.flatnonzero(~d.private.to_numpy())
+    low = np.zeros(len(d), bool)
+    order = np.lexsort((rng.random(len(pub)), d.engagement.to_numpy()[pub]))
+    low[pub[order[: int(round(0.25 * len(pub)))]]] = True
+    pdel = np.where(low, 2 * deletion, deletion)
     deleted = rng.random(len(d)) < pdel
     vis = (~d.private.to_numpy()) & (~deleted)
     d["observed"] = vis
@@ -381,24 +386,50 @@ def _m3_frame(items: pd.DataFrame) -> pd.DataFrame:
     return m
 
 
-def _n1(items: pd.DataFrame, n_boot: int = 300, seed: int = 20261008) -> Result | None:
+def _lagged(step: np.ndarray, key: np.ndarray, val: np.ndarray, horizon: int) -> tuple[np.ndarray, np.ndarray]:
+    """Per row: count and sum of ``val`` over earlier rows with the same ``key`` whose engagement window has closed
+    (``step + horizon < focal step``). Rows must be in time order."""
+    n, tot = np.zeros(len(step)), np.zeros(len(step))
+    for idx in pd.Series(np.arange(len(step))).groupby(key, sort=False).indices.values():
+        st = step[idx]
+        c = np.concatenate([[0.0], np.cumsum(val[idx])])
+        j = np.searchsorted(st, st - horizon, side="left")
+        n[idx], tot[idx] = j, c[j]
+    return n, tot
+
+
+def _n1(items: pd.DataFrame, n_boot: int = 300, seed: int = 20261008, horizon: int = 5) -> Result | None:
+    """Nested out-of-time prediction of a top-decile hit. Engagement-based histories (author prior mean, unit prior
+    engagement and unit fitness) use only earlier posts whose engagement window (``horizon`` steps, as in
+    :func:`observe`) closed before the focal post, so no feature contains likes given after the focal post; counts
+    of earlier posts are public at once and are not lagged. The shrinkage target and the fallback author mean are
+    the mean over training-period posts whose window closed before the test period starts."""
     d = items.sort_values("ts").reset_index(drop=True)
     d["y"] = np.log1p(d.engagement)
-    # author prior mean (expanding, strictly earlier)
+    d["t"] = d.step
+    step = d.step.to_numpy()
+    meme = d.unit.notna().to_numpy()
+    prior_count = d[meme].groupby("unit").cumcount()
+    if (prior_count >= 1).sum() < 200:
+        return None
+    cut = d.t[meme][(prior_count >= 1).to_numpy()].quantile(0.6)
+    closed = d.y[(d.t + horizon) < cut]
+    ybar = float(closed.mean()) if len(closed) else float(d.y[d.t < cut].mean())
     g = d.groupby("author").y
     d["author_prior_n"] = g.cumcount()
-    d["author_prior_mean"] = (g.cumsum() - d.y) / d.author_prior_n.replace(0, np.nan)
-    d["author_prior_mean"] = d.author_prior_mean.fillna(d.y.mean())
+    an, asum = _lagged(step, d.author.to_numpy(), d.y.to_numpy(), horizon)
+    d["author_prior_mean"] = np.where(an > 0, asum / np.maximum(an, 1), ybar)
     d["log_followers"] = np.log1p(d.author_followers)
-    d["t"] = d.step
-    m = d.dropna(subset=["unit"]).copy()
+    m = d[meme].copy()
     gu = m.groupby("unit")
     m["prior_n"] = gu.cumcount()
     m["log_prior_n"] = np.log1p(m.prior_n)
-    m["log_prior_eng"] = np.log1p(gu.engagement.cumsum() - m.engagement)
+    st, uk = m.step.to_numpy(), m.unit.to_numpy()
+    _, eng_sum = _lagged(st, uk, m.engagement.to_numpy(float), horizon)
+    un, usum = _lagged(st, uk, m.y.to_numpy(), horizon)
+    m["log_prior_eng"] = np.log1p(eng_sum)
     k = 5.0
-    prior_sum = gu.y.cumsum() - m.y
-    m["unit_fitness"] = (prior_sum + k * d.y.mean()) / (m.prior_n + k)
+    m["unit_fitness"] = (usum + k * ybar) / (un + k)
     first = gu.ts.transform("min")
     m["unit_age"] = (m.ts - first).dt.total_seconds() / 3600
     pt = dict(zip(d.item_id, d.text))
@@ -406,9 +437,6 @@ def _n1(items: pd.DataFrame, n_boot: int = 300, seed: int = 20261008) -> Result 
         1 - text.sim_edit(t, pt[p]) if isinstance(p, str) and p in pt else 0.0 for t, p in zip(m.text, m.parent)
     ]
     m = m[m.prior_n >= 1]
-    if len(m) < 200:
-        return None
-    cut = m.t.quantile(0.6)
     tr, te = m[m.t < cut].copy(), m[m.t >= cut].copy()
     thr = tr.engagement.quantile(0.9)
     tr["hit"] = (tr.engagement > thr).astype(int) if (tr.engagement > thr).any() else (tr.engagement >= thr).astype(int)

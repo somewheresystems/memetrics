@@ -276,7 +276,7 @@ def replicator_null(
                 lo, hi = (mid, hi) if mean_step(mid) < step_obs else (lo, mid)
             lam = (lo + hi) / 2
     betas, fmeds, tows = [], [], []
-    for _ in range(n_sims):
+    for k in range(n_sims):
         s = _resimulate(e, roots, p_mut, lam, vocab, rng, p_indel)
         items = pd.concat(
             [
@@ -285,7 +285,9 @@ def replicator_null(
             ]
         )
         meds = {
-            u: (lambda vc: list(vc.index)[medoid(list(vc.index), vc.to_numpy(), cap=400)])(g.text.value_counts())
+            u: (lambda vc: list(vc.index)[medoid(list(vc.index), vc.to_numpy(), cap=400, seed=seed + k)])(
+                g.text.value_counts()
+            )
             for u, g in items.groupby("unit")
         }
         st = edge_stats(s, meds, sim)
