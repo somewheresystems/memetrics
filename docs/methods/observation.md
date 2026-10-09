@@ -42,9 +42,9 @@ from memetrics import observation as ob
 
 log = ob.simulate("attraction", p_private=0.5, seed=1)
 obs = ob.observe(log, edge_mode="explicit")
-res = ob.evaluate(obs, null_sims=50)       # {"M1": Result, "M2": ..., "N1": ...}
-ob.composite(res, calibrated=True)         # inferred process label
-ob.sweep(p_grid=(0, 0.3, 0.6, 0.9), reps=10, workers=8)   # tidy table for confusion() and breakdown_fraction()
+res = ob.evaluate(obs, null_sims=50)  # {"M1": Result, "M2": ..., "N1": ...}
+ob.composite(res, calibrated=True)  # inferred process label
+ob.sweep(p_grid=(0, 0.3, 0.6, 0.9), reps=10, workers=8)  # tidy table for confusion() and breakdown_fraction()
 ```
 
 `params_for_size(n_items)` scales the world so the observed table has about `n_items` rows. The composite rule

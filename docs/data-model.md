@@ -22,8 +22,8 @@ locally).
 from memetrics import read_items, validate, write_items
 from memetrics.schema import conform
 
-items = conform(my_frame)      # coerce types and column order
-validate(items)                # raises memetrics.SchemaError with every problem found
+items = conform(my_frame)  # coerce types and column order
+validate(items)  # raises memetrics.SchemaError with every problem found
 write_items(items, "items.parquet")
 items = read_items("items.parquet")
 ```
