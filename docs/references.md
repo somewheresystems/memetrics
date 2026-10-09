@@ -58,3 +58,22 @@ Every entry is copied from the verified bibliography of the accompanying study.
 - Tehrani, J. J. (2013). The phylogeny of Little Red Riding Hood. *PLoS ONE*, 8, e78871. doi:10.1371/journal.pone.0078871
 - Weng, L., Flammini, A., Vespignani, A., & Menczer, F. (2012). Competition among memes in a world with limited attention. *Scientific Reports*, 2, 335. doi:10.1038/srep00335
 - Wimsatt, W. C. (2009). Memetics does not provide a useful way of understanding cultural evolution: A developmental perspective. In *Contemporary Debates in Philosophy of Biology* (pp. 273–291). Wiley. doi:10.1002/9781444314922.ch16
+
+## Statistical methods
+
+Cited in the docstrings of the modules that implement them; each checked against Crossref.
+
+- Ashman, K. A., Bird, C. M., & Zepf, S. E. (1994). Detecting bimodality in astronomical datasets. *The Astronomical Journal*, 108, 2348. doi:10.1086/117248
+- Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear mixed-effects models using lme4. *Journal of Statistical Software*, 67(1). doi:10.18637/jss.v067.i01
+- Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. *Journal of the Royal Statistical Society: Series B*, 57, 289–300. doi:10.1111/j.2517-6161.1995.tb02031.x
+- Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2008). Bootstrap-based improvements for inference with clustered errors. *The Review of Economics and Statistics*, 90, 414–427. doi:10.1162/rest.90.3.414
+- Campello, R. J. G. B., Moulavi, D., & Sander, J. (2013). Density-based clustering based on hierarchical density estimates. *Advances in Knowledge Discovery and Data Mining*, LNCS, 160–172. doi:10.1007/978-3-642-37456-2_14
+- Donner, A. (1986). A review of inference procedures for the intraclass correlation coefficient in the one-way random effects model. *International Statistical Review*, 54, 67–82. doi:10.2307/1403259
+- Gao, K., & Owen, A. (2017). Efficient moment calculations for variance components in large unbalanced crossed random effects models. *Electronic Journal of Statistics*, 11, 1235–1296. doi:10.1214/17-EJS1236
+- MacKinnon, J. G., & White, H. (1985). Some heteroskedasticity-consistent covariance matrix estimators with improved finite sample properties. *Journal of Econometrics*, 29, 305–325. doi:10.1016/0304-4076(85)90158-7
+- McInnes, L., Healy, J., & Astels, S. (2017). hdbscan: Hierarchical density based clustering. *The Journal of Open Source Software*, 2(11), 205. doi:10.21105/joss.00205
+- Micci-Barreca, D. (2001). A preprocessing scheme for high-cardinality categorical attributes in classification and prediction problems. *ACM SIGKDD Explorations Newsletter*, 3, 27–32. doi:10.1145/507533.507538
+- Owen, A. B. (2007). The pigeonhole bootstrap. *The Annals of Applied Statistics*, 1(2). doi:10.1214/07-AOAS122
+- Owen, A. B., & Eckles, D. (2012). Bootstrapping data arrays of arbitrary order. *The Annals of Applied Statistics*, 6, 895–927. doi:10.1214/12-AOAS547
+- Rousseeuw, P. J. (1987). Silhouettes: A graphical aid to the interpretation and validation of cluster analysis. *Journal of Computational and Applied Mathematics*, 20, 53–65. doi:10.1016/0377-0427(87)90125-7
+- Shrout, P. E., & Fleiss, J. L. (1979). Intraclass correlations: Uses in assessing rater reliability. *Psychological Bulletin*, 86, 420–428. doi:10.1037/0033-2909.86.2.420

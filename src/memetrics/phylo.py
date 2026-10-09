@@ -5,7 +5,7 @@
   pairwise sums m1 <= m2 <= m3, delta_q = (m3 - m2) / (m3 - m1) (0 when m3 = m1). 0 = perfectly tree-like.
 - Q-residual: Gray, Bryant & Greenhill (2010), "On the shape and fabric of human history", Phil. Trans. R. Soc. B
   365:3923-3933, doi:10.1098/rstb.2010.0162. Here: (m3 - m2)^2 averaged over quartets, with distances first scaled
-  to mean 1 so values are comparable across data sets (the scaling convention is ours; compare only with references
+  to mean 1, as Gray et al. do, because scaling changes Q-residuals but not delta (compare only with references
   computed by this module).
 - Dataset values are means over all quartets (or a seeded random sample of quartets when there are too many).
 

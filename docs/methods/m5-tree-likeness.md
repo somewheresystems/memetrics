@@ -10,7 +10,7 @@ For each of the largest units (default 10) with at least 8 distinct variants, th
 word-level edit-distance matrix. For every quartet with pairwise sums `m1 <= m2 <= m3`, the delta score is
 `(m3 - m2) / (m3 - m1)` (Holland et al. 2002); the dataset value is the mean over quartets (0 = perfectly
 tree-like). The Q-residual (Gray, Bryant & Greenhill 2010) is reported in `detail`, computed on distances scaled to
-mean 1; compare it only with references computed by this package.
+mean 1 as in Gray et al.; compare it only with references computed by this package.
 
 ## Default rule
 

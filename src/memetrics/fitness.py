@@ -15,8 +15,9 @@ so s2_c = T - W_c, s2_a = T - W_a, s2_e = W_c + W_a - T. Pair sums are computed 
 (sum_{i<j} (r_i - r_j)^2 = n sum r^2 - (sum r)^2). The OLS step treats fixed effects as known (slightly optimistic).
 
 Confidence intervals: pigeonhole bootstrap for crossed data (Owen 2007, "The pigeonhole bootstrap", Ann. Appl. Stat.
-1, doi:10.1214/07-AOAS122): independent Poisson(1) weights for every content and every author, item
-weight = product.
+1(2), doi:10.1214/07-AOAS122, which resamples rows and columns independently) in the reweighting form of Owen &
+Eckles (2012, "Bootstrapping data arrays of arbitrary order", Ann. Appl. Stat. 6(3):895-927, doi:10.1214/12-AOAS547):
+independent Poisson(1) weights for every content and every author, item weight = product.
 
 Default decision rule (:func:`m3_verdict`): content ICC >= 0.5 "content dominates"; < 0.2 "weak content fitness";
 otherwise "intermediate".
@@ -149,8 +150,10 @@ def content_icc(
 
 
 def oneway_icc(y: np.ndarray, group: np.ndarray) -> float:
-    """Unadjusted one-way ANOVA ICC(1) with unequal group sizes (Shrout & Fleiss 1979, Psychol. Bull. 86:420-428,
-    doi:10.1037/0033-2909.86.2.420; ICC(1,1) with the n0 adjustment for unequal group sizes)."""
+    """Unadjusted one-way ANOVA ICC(1): ICC(1,1) of Shrout & Fleiss (1979, Psychol. Bull. 86(2):420-428,
+    doi:10.1037/0033-2909.86.2.420), defined there for equal group sizes. Unequal groups use the average group size
+    n0 = (N - sum n_i^2 / N) / (k - 1) in place of k, the standard ANOVA estimator of the one-way random-effects
+    model (Donner 1986, Int. Stat. Rev. 54(1):67-82, doi:10.2307/1403259)."""
     d = pd.DataFrame({"y": y, "g": group})
     g = d.groupby("g").y
     k, n = g.ngroups, len(d)
