@@ -81,15 +81,18 @@ def conform(df: pd.DataFrame) -> pd.DataFrame:
     d["ts"] = pd.to_datetime(d["ts"], utc=True)
     for c in ("item_id", "author", "community", "kind", "unit", "parent"):
         if c in d:
-            d[c] = d[c].astype(object).where(d[c].notna(), None)
-            d[c] = d[c].map(lambda x: x if x is None or isinstance(x, str) else str(x))
+            d[c] = pd.Series([None if _null(x) else str(x) for x in d[c]], index=d.index, dtype=object)
     if "engagement" in d:
         d["engagement"] = pd.to_numeric(d["engagement"], errors="coerce").astype(float)
     if "phash" in d:
-        d["phash"] = d["phash"].map(lambda h: None if h is None or (isinstance(h, float) and np.isnan(h))
-                                    else np.uint64(int(h, 16) if isinstance(h, str) else int(h)))
+        d["phash"] = pd.Series([None if _null(h) else np.uint64(int(h, 16) if isinstance(h, str) else int(h))
+                                for h in d["phash"]], index=d.index, dtype=object)
     cols = [c for c in COLUMNS if c in d] + [c for c in d.columns if c not in COLUMNS]
     return d[cols].reset_index(drop=True)
+
+
+def _null(x) -> bool:
+    return x is None or x is pd.NA or (isinstance(x, float) and np.isnan(x))
 
 
 def read_items(path: str | Path, validate_schema: bool = True) -> pd.DataFrame:

@@ -339,3 +339,50 @@ def gaussian_surrogate(emb: np.ndarray, n: int | None = None, dims: int = 64, se
     p = PCA(dims, random_state=seed).fit(x)
     z = rng.standard_normal((n or len(x), dims)) * np.sqrt(p.explained_variance_)
     return _unit(z @ p.components_ + p.mean_)
+
+
+# ---------------------------------------------------------------- unit assignment on an items table
+
+
+def assign(items: pd.DataFrame, method: str = "auto", emb: np.ndarray | None = None, tau: float = 0.5,
+           min_size: int = 5, max_hamming: int = 4, min_cluster_size: int = 10, seed: int = 0) -> pd.DataFrame:
+    """Fill the ``unit`` column of an items table; returns a copy.
+
+    ``method``:
+      - ``minhash``: near-duplicate text units, connected components of word-5-shingle Jaccard >= ``tau`` on
+        normalized text (:func:`memetrics.text.minhash_units`);
+      - ``phash``: identical-content groups, pHash Hamming <= ``max_hamming`` (:func:`identical_groups`), with the
+        caption check when ``text`` is present;
+      - ``hdbscan``: HDBSCAN clusters of ``emb`` (one row per item, in table order; :func:`cluster_hdbscan`);
+      - ``auto``: ``hdbscan`` if ``emb`` is given, else ``minhash`` if most rows have text, else ``phash``.
+
+    Groups with fewer than ``min_size`` items (and HDBSCAN noise) get ``unit = None``.
+    """
+    from .text import minhash_units, normalize
+
+    d = items.copy()
+    has_text = "text" in d and d.text.fillna("").str.strip().ne("").mean() > 0.5
+    if method == "auto":
+        method = "hdbscan" if emb is not None else "minhash" if has_text else "phash"
+    lab = np.full(len(d), -1, dtype=np.int64)
+    if method == "minhash":
+        norm = d["text"].map(normalize) if "text" in d else pd.Series("", index=d.index)
+        ok = np.flatnonzero(norm.ne("").to_numpy())
+        lab[ok] = minhash_units(norm.iloc[ok].tolist(), tau=tau)
+    elif method == "phash":
+        if "phash" not in d:
+            raise ValueError("method='phash' needs a phash column")
+        ok = np.flatnonzero(d.phash.notna().to_numpy())
+        caps = d.text.iloc[ok].tolist() if "text" in d else None
+        lab[ok] = identical_groups(d.phash.iloc[ok].astype("uint64").to_numpy(), d.ts.iloc[ok].to_numpy(),
+                                   max_hamming=max_hamming, text=caps)
+    elif method == "hdbscan":
+        if emb is None or len(emb) != len(d):
+            raise ValueError("method='hdbscan' needs emb with one row per item")
+        lab = np.asarray(cluster_hdbscan(emb, min_cluster_size=min_cluster_size, seed=seed), dtype=np.int64)
+    else:
+        raise ValueError("method must be auto, minhash, phash or hdbscan")
+    sizes = pd.Series(lab[lab >= 0]).value_counts()
+    keep = (lab >= 0) & pd.Series(lab).map(sizes).fillna(0).ge(min_size).to_numpy()
+    d["unit"] = pd.Series([f"{method[0]}{x}" if k else None for x, k in zip(lab, keep)], index=d.index, dtype=object)
+    return d
