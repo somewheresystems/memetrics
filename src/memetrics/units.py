@@ -15,6 +15,7 @@ D < 2 or blend share > 0.25; otherwise "intermediate".
 
 No network calls; embeddings are computed elsewhere (e.g. ``memetrics.io`` image readers).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -31,9 +32,16 @@ def hamming64(a: np.ndarray, b: np.ndarray | int) -> np.ndarray:
     return np.unpackbits(x.view(np.uint8).reshape(-1, 8), axis=1).sum(1).reshape(x.shape)
 
 
-def identical_groups(phash: np.ndarray, ts: np.ndarray | None = None, max_hamming: int = 4,
-                     emb: np.ndarray | None = None, min_cos: float = 0.90,
-                     text: list[str] | None = None, min_text_sim: float = 0.8, min_tokens: int = 3) -> np.ndarray:
+def identical_groups(
+    phash: np.ndarray,
+    ts: np.ndarray | None = None,
+    max_hamming: int = 4,
+    emb: np.ndarray | None = None,
+    min_cos: float = 0.90,
+    text: list[str] | None = None,
+    min_text_sim: float = 0.8,
+    min_tokens: int = 3,
+) -> np.ndarray:
     """Greedy identical-content grouping in time order (study unit level U0).
 
     An item joins the group of the earliest representative with pHash Hamming <= ``max_hamming`` and, when given,
@@ -68,8 +76,12 @@ def identical_groups(phash: np.ndarray, ts: np.ndarray | None = None, max_hammin
                 continue
             if emb is not None and float(emb[i] @ emb[r]) < min_cos:
                 continue
-            if toks is not None and toks[i] >= min_tokens and toks[r] >= min_tokens and \
-                    Levenshtein.normalized_similarity(text[i], text[r]) < min_text_sim:
+            if (
+                toks is not None
+                and toks[i] >= min_tokens
+                and toks[r] >= min_tokens
+                and Levenshtein.normalized_similarity(text[i], text[r]) < min_text_sim
+            ):
                 continue
             best = r
             break
@@ -85,11 +97,20 @@ def identical_groups(phash: np.ndarray, ts: np.ndarray | None = None, max_hammin
 # ---------------------------------------------------------------- clustering
 
 
-def cluster_hdbscan(emb: np.ndarray, min_cluster_size: int = 10, min_samples: int = 5, pca_dims: int | None = 64,
-                    max_fit: int = 250_000, seed: int = 0, selection: str = "eom") -> np.ndarray:
-    """HDBSCAN (Campello, Moulavi & Sander 2013, PAKDD, LNCS, pp. 160-172, doi:10.1007/978-3-642-37456-2_14) on (optionally PCA-reduced) unit-normalized embeddings.
+def cluster_hdbscan(
+    emb: np.ndarray,
+    min_cluster_size: int = 10,
+    min_samples: int = 5,
+    pca_dims: int | None = 64,
+    max_fit: int = 250_000,
+    seed: int = 0,
+    selection: str = "eom",
+) -> np.ndarray:
+    """HDBSCAN (Campello, Moulavi & Sander 2013, PAKDD, LNCS, pp. 160-172, doi:10.1007/978-3-642-37456-2_14) on
+    (optionally PCA-reduced) unit-normalized embeddings.
 
-    If there are more than ``max_fit`` items, HDBSCAN is fit on a seeded subsample and the remaining items are assigned to
+    If there are more than ``max_fit`` items, HDBSCAN is fit on a seeded subsample and the remaining items are
+    assigned to
     the cluster of their nearest clustered neighbour when within that cluster's 95th-percentile radius (else noise).
     ``selection``: HDBSCAN cluster-selection method, "eom" (excess of mass, default; tends to merge into a few large
     clusters) or "leaf" (finest stable clusters). Returns labels with -1 = noise.
@@ -100,12 +121,22 @@ def cluster_hdbscan(emb: np.ndarray, min_cluster_size: int = 10, min_samples: in
     def fit(z):
         try:  # the hdbscan package (McInnes et al.) is much faster (Boruvka, parallel core distances)
             import hdbscan
-            return hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples,
-                                   cluster_selection_method=selection, core_dist_n_jobs=-1).fit_predict(z)
+
+            return hdbscan.HDBSCAN(
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+                cluster_selection_method=selection,
+                core_dist_n_jobs=-1,
+            ).fit_predict(z)
         except ImportError:
             from sklearn.cluster import HDBSCAN
-            return HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples,
-                           cluster_selection_method=selection, copy=True).fit_predict(z)
+
+            return HDBSCAN(
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+                cluster_selection_method=selection,
+                copy=True,
+            ).fit_predict(z)
 
     x = _unit(emb)
     rng = np.random.default_rng(seed)
@@ -141,18 +172,20 @@ def knn(x: np.ndarray, k: int, chunk: int = 4096) -> tuple[np.ndarray, np.ndarra
     available, else scikit-learn."""
     try:
         import torch
+
         dev = "cuda" if torch.cuda.is_available() else None
     except ImportError:
         dev = None
     if dev is None:
         from sklearn.neighbors import NearestNeighbors
+
         d, j = NearestNeighbors(n_neighbors=k).fit(x).kneighbors(x)
         return d, j
     X = torch.as_tensor(np.ascontiguousarray(x), dtype=torch.float32, device=dev)
     sq = (X * X).sum(1)
     D, J = [], []
     for a in range(0, len(X), chunk):
-        d2 = sq[a:a + chunk, None] + sq[None, :] - 2 * X[a:a + chunk] @ X.T
+        d2 = sq[a : a + chunk, None] + sq[None, :] - 2 * X[a : a + chunk] @ X.T
         v, i = torch.topk(d2, k, dim=1, largest=False)
         D.append(v.clamp_min(0).sqrt().cpu())
         J.append(i.cpu())
@@ -161,8 +194,9 @@ def knn(x: np.ndarray, k: int, chunk: int = 4096) -> tuple[np.ndarray, np.ndarra
     return d, j
 
 
-def hdbscan_knn(x: np.ndarray, min_cluster_size: int = 10, min_samples: int = 5, k: int = 30,
-                selection: str = "eom") -> np.ndarray:
+def hdbscan_knn(
+    x: np.ndarray, min_cluster_size: int = 10, min_samples: int = 5, k: int = 30, selection: str = "eom"
+) -> np.ndarray:
     """HDBSCAN on the mutual-reachability graph restricted to each point's k nearest neighbours.
 
     Core distance = distance to the ``min_samples``-th neighbour (self excluded), as in the ``hdbscan`` package;
@@ -174,9 +208,9 @@ def hdbscan_knn(x: np.ndarray, min_cluster_size: int = 10, min_samples: int = 5,
 
     Requires the ``hdbscan`` package (``pip install memetrics[image]`` or ``[text]``)."""
     import scipy.sparse as sp
-    from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
     from hdbscan._hdbscan_linkage import label
     from hdbscan._hdbscan_tree import compute_stability, condense_tree, get_clusters
+    from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
 
     n = len(x)
     d, j = knn(x, max(k, min_samples) + 1)
@@ -234,8 +268,13 @@ def ashman_d(w: np.ndarray, b: np.ndarray) -> float:
     return float(np.sqrt(2) * abs(w.mean() - b.mean()) / den)
 
 
-def m1_verdict(median_D: float, blend_share: float, d_threshold: float = 2.0, blend_units: float = 0.10,
-               blend_continuum: float = 0.25) -> str:
+def m1_verdict(
+    median_D: float,
+    blend_share: float,
+    d_threshold: float = 2.0,
+    blend_units: float = 0.10,
+    blend_continuum: float = 0.25,
+) -> str:
     """Default M1 rule: "units" if median D > ``d_threshold`` and blend share < ``blend_units``; "continuum" if
     median D < ``d_threshold`` or blend share > ``blend_continuum``; otherwise "intermediate"."""
     if median_D > d_threshold and blend_share < blend_units:
@@ -263,7 +302,7 @@ def unit_stats(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, seed: in
     idx = np.flatnonzero(labels >= 0)
     S = np.empty((len(idx), len(units)), dtype=np.float32)
     for a in range(0, len(idx), 50_000):
-        S[a:a + 50_000] = x[idx[a:a + 50_000]] @ M.T
+        S[a : a + 50_000] = x[idx[a : a + 50_000]] @ M.T
     own = np.array([pos[l] for l in labels[idx]])
     w = S[np.arange(len(idx)), own]
     S[np.arange(len(idx)), own] = -np.inf
@@ -291,10 +330,19 @@ def silhouette_cos(emb: np.ndarray, labels: np.ndarray, max_n: int = 20_000, see
     return float(silhouette_score(_unit(emb)[m], labels[m], metric="cosine"))
 
 
-def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_threshold: float = 2.0,
-                 blend_units: float = 0.10, blend_continuum: float = 0.25, n_boot: int = 2000, seed: int = 0,
-                 name: str = "M1 discreteness", stats: pd.DataFrame | None = None,
-                 mask: np.ndarray | None = None) -> Result:
+def discreteness(
+    emb: np.ndarray,
+    labels: np.ndarray,
+    min_unit: int = 10,
+    d_threshold: float = 2.0,
+    blend_units: float = 0.10,
+    blend_continuum: float = 0.25,
+    n_boot: int = 2000,
+    seed: int = 0,
+    name: str = "M1 discreteness",
+    stats: pd.DataFrame | None = None,
+    mask: np.ndarray | None = None,
+) -> Result:
     """M1 test: median per-unit Ashman's D (bootstrap CI over units), blend share, silhouette, noise share.
 
     ``stats``: precomputed ``unit_stats`` output (reuse across subsets). ``mask``: summarize only these items (e.g.
@@ -308,8 +356,11 @@ def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_thre
     if mask is not None:
         st = st[np.asarray(mask)]
         emb, labels = (emb[np.asarray(mask)] if emb is not None else None), labels[np.asarray(mask)]
-    per = st.dropna(subset=["D_unit"]).groupby("label").agg(D=("D_unit", "first"), n=("w", "size"),
-                                                            blend=("blend", "mean"))
+    per = (
+        st.dropna(subset=["D_unit"])
+        .groupby("label")
+        .agg(D=("D_unit", "first"), n=("w", "size"), blend=("blend", "mean"))
+    )
     rng = np.random.default_rng(seed)
     Ds = per.D.replace(np.inf, 1e6).dropna().to_numpy()
     boots = [np.median(rng.choice(Ds, len(Ds))) for _ in range(n_boot)] if len(Ds) else [np.nan]
@@ -325,9 +376,22 @@ def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_thre
     except ValueError:
         sil = np.nan
     w, b = st.loc[clustered, "w"].to_numpy(), st.loc[clustered, "b"].to_numpy()
-    return Result(name, med, float(np.quantile(boots, 0.025)), float(np.quantile(boots, 0.975)), int(clustered.sum()),
-                  {"blend_share": blend, "noise_share": noise, "silhouette": sil, "n_units": int(len(per)),
-                   "pooled_D": ashman_d(w, b), "mean_D": float(np.mean(Ds)) if len(Ds) else np.nan}, v)
+    return Result(
+        name,
+        med,
+        float(np.quantile(boots, 0.025)),
+        float(np.quantile(boots, 0.975)),
+        int(clustered.sum()),
+        {
+            "blend_share": blend,
+            "noise_share": noise,
+            "silhouette": sil,
+            "n_units": int(len(per)),
+            "pooled_D": ashman_d(w, b),
+            "mean_D": float(np.mean(Ds)) if len(Ds) else np.nan,
+        },
+        v,
+    )
 
 
 def gaussian_surrogate(emb: np.ndarray, n: int | None = None, dims: int = 64, seed: int = 0) -> np.ndarray:
@@ -344,8 +408,16 @@ def gaussian_surrogate(emb: np.ndarray, n: int | None = None, dims: int = 64, se
 # ---------------------------------------------------------------- unit assignment on an items table
 
 
-def assign(items: pd.DataFrame, method: str = "auto", emb: np.ndarray | None = None, tau: float = 0.5,
-           min_size: int = 5, max_hamming: int = 4, min_cluster_size: int = 10, seed: int = 0) -> pd.DataFrame:
+def assign(
+    items: pd.DataFrame,
+    method: str = "auto",
+    emb: np.ndarray | None = None,
+    tau: float = 0.5,
+    min_size: int = 5,
+    max_hamming: int = 4,
+    min_cluster_size: int = 10,
+    seed: int = 0,
+) -> pd.DataFrame:
     """Fill the ``unit`` column of an items table; returns a copy.
 
     ``method``:
@@ -374,8 +446,9 @@ def assign(items: pd.DataFrame, method: str = "auto", emb: np.ndarray | None = N
             raise ValueError("method='phash' needs a phash column")
         ok = np.flatnonzero(d.phash.notna().to_numpy())
         caps = d.text.iloc[ok].tolist() if "text" in d else None
-        lab[ok] = identical_groups(d.phash.iloc[ok].astype("uint64").to_numpy(), d.ts.iloc[ok].to_numpy(),
-                                   max_hamming=max_hamming, text=caps)
+        lab[ok] = identical_groups(
+            d.phash.iloc[ok].astype("uint64").to_numpy(), d.ts.iloc[ok].to_numpy(), max_hamming=max_hamming, text=caps
+        )
     elif method == "hdbscan":
         if emb is None or len(emb) != len(d):
             raise ValueError("method='hdbscan' needs emb with one row per item")

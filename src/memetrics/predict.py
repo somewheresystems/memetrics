@@ -12,6 +12,7 @@ each item. Heritable fitness is an empirical-Bayes-shrunk mean residual (shrinka
 encoding with smoothing (Micci-Barreca 2001, SIGKDD Explor. 3(1):27-32, doi:10.1145/507533.507538).
 CIs: cluster bootstrap over a grouping column (e.g. unit) of per-item differences in log-likelihood and in AUC.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -20,9 +21,17 @@ import pandas as pd
 from .result import Result
 
 
-def prior_unit_features(df: pd.DataFrame, unit: str, ts: str, value: str | None = None, lag: float = 0.0,
-                        k: float = 5.0, prefix: str | None = None) -> pd.DataFrame:
-    """For each row, statistics of earlier rows of the same unit with ``ts < row.ts - lag`` (strictly earlier) (ts numeric seconds):
+def prior_unit_features(
+    df: pd.DataFrame,
+    unit: str,
+    ts: str,
+    value: str | None = None,
+    lag: float = 0.0,
+    k: float = 5.0,
+    prefix: str | None = None,
+) -> pd.DataFrame:
+    """For each row, statistics of earlier rows of the same unit with ``ts < row.ts - lag`` (strictly earlier;
+    ``ts`` numeric, e.g. seconds):
     ``n`` (prior count), ``age`` (ts - first ts of the unit, available without lag since the first appearance is
     public), and if ``value`` is given ``fit`` = n/(n+k) * mean(value) (shrunk toward 0; pass residuals) and ``sum``.
     Rows with missing unit get n = 0, fit = 0, age = NaN."""
@@ -63,9 +72,18 @@ def _auc(y, p):
     return roc_auc_score(y, p) if 0 < y.sum() < len(y) else np.nan
 
 
-def nested_compare(train: pd.DataFrame, test: pd.DataFrame, y: str, blocks: dict[str, list[str]],
-                   comparisons: list[tuple[list[str], list[str]]], cluster: str, model: str = "logit",
-                   n_boot: int = 2000, seed: int = 0, min_auc_gain: float = 0.0) -> list[Result]:
+def nested_compare(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    y: str,
+    blocks: dict[str, list[str]],
+    comparisons: list[tuple[list[str], list[str]]],
+    cluster: str,
+    model: str = "logit",
+    n_boot: int = 2000,
+    seed: int = 0,
+    min_auc_gain: float = 0.0,
+) -> list[Result]:
     """Held-out comparisons of nested logistic models.
 
     ``blocks``: name -> feature columns. ``comparisons``: (base block names, added block names). For each, returns a
@@ -104,10 +122,23 @@ def nested_compare(train: pd.DataFrame, test: pd.DataFrame, y: str, blocks: dict
         alo, ahi = np.nanquantile(ba, [0.025, 0.975])
         adds = lo > 0 and alo > 0 and dauc >= min_auc_gain
         name = f"{'+'.join(base)} -> +{'+'.join(add)}"
-        out.append(Result(name, float(dll.mean()), float(lo), float(hi), len(test),
-                          {"delta_auc": float(dauc), "delta_auc_ci": (float(alo), float(ahi)),
-                           "auc_base": float(_auc(yte, p0)), "auc_full": float(_auc(yte, p1)), "model": model},
-                          "adds" if adds else "no gain"))
+        out.append(
+            Result(
+                name,
+                float(dll.mean()),
+                float(lo),
+                float(hi),
+                len(test),
+                {
+                    "delta_auc": float(dauc),
+                    "delta_auc_ci": (float(alo), float(ahi)),
+                    "auc_base": float(_auc(yte, p0)),
+                    "auc_full": float(_auc(yte, p1)),
+                    "model": model,
+                },
+                "adds" if adds else "no gain",
+            )
+        )
     return out
 
 

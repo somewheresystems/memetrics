@@ -1,10 +1,12 @@
 """REML crossed random-effects variance components (M3).
 
 :mod:`memetrics.fitness` estimates the same crossed model by pairwise moment U-statistics (Gao & Owen 2017), which
-is fast and is the package default. This module adds the REML fit. It uses the penalized least-squares formulation of lme4 (Bates, Maechler, Bolker & Walker 2015,
+is fast and is the package default. This module adds the REML fit. It uses the penalized least-squares
+formulation of lme4 (Bates, Maechler, Bolker & Walker 2015,
 J. Stat. Softw. 67(1), doi:10.18637/jss.v067.i01), with a sparse LU for the log-determinant. Reporting both
 estimators gives an estimator-robustness check.
 """
+
 from __future__ import annotations
 
 import math
@@ -17,6 +19,7 @@ from scipy.sparse.linalg import splu
 from .fitness import m3_verdict, oneway_icc
 from .result import Result
 from .schema import require
+
 
 def _indicator(codes: np.ndarray, n_levels: int) -> sparse.csc_matrix:
     n = len(codes)
@@ -74,8 +77,14 @@ def crossed_reml(y: np.ndarray, X: np.ndarray, groups: list[np.ndarray], x0: np.
             best = res
     logdet, r2, b = solve(best.x)
     s2 = r2 / (n - p)
-    return {"sigma2": s2, "var": list(np.exp(2 * best.x) * s2), "beta": b, "converged": bool(best.success),
-            "n_levels": qs, "log_lambda": best.x}
+    return {
+        "sigma2": s2,
+        "var": list(np.exp(2 * best.x) * s2),
+        "beta": b,
+        "converged": bool(best.success),
+        "n_levels": qs,
+        "log_lambda": best.x,
+    }
 
 
 def _design(df: pd.DataFrame, fixed: list[str]) -> np.ndarray:
@@ -86,10 +95,19 @@ def _design(df: pd.DataFrame, fixed: list[str]) -> np.ndarray:
     return np.column_stack([np.ones(len(df)), X.to_numpy(float)])
 
 
-def reml_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", author: str = "author",
-             fixed: list[str] | None = None, n_boot: int = 200, seed: int = 20261008,
-             strong: float = 0.5, weak: float = 0.2, name: str = "M3 content ICC (REML)",
-             bootstrap: str = "parametric") -> Result:
+def reml_icc(
+    df: pd.DataFrame,
+    y: str = "engagement",
+    content: str = "unit",
+    author: str = "author",
+    fixed: list[str] | None = None,
+    n_boot: int = 200,
+    seed: int = 20261008,
+    strong: float = 0.5,
+    weak: float = 0.2,
+    name: str = "M3 content ICC (REML)",
+    bootstrap: str = "parametric",
+) -> Result:
     """Content-intrinsic fitness: content ICC = s2_content / (s2_content + s2_author + s2_e) from a crossed
     random-effects REML fit with fixed effects `fixed` (categorical columns are dummy-coded, numeric kept).
 
@@ -122,8 +140,12 @@ def reml_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", aut
         sc_, sa_ = np.sqrt(r["var"][0]), np.sqrt(r["var"][1])
         se_ = np.sqrt(r["sigma2"])
         for _ in range(n_boot):
-            ys = mu + rng.normal(0, sc_, cc.max() + 1)[cc] + rng.normal(0, sa_, aa.max() + 1)[aa] \
+            ys = (
+                mu
+                + rng.normal(0, sc_, cc.max() + 1)[cc]
+                + rng.normal(0, sa_, aa.max() + 1)[aa]
                 + rng.normal(0, se_, len(d))
+            )
             try:
                 rr = crossed_reml(ys, X, [cc, aa], x0=r["log_lambda"])
             except Exception:  # noqa: BLE001
@@ -148,14 +170,20 @@ def reml_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", aut
             except Exception:  # noqa: BLE001 - singular resamples are skipped and counted
                 continue
     bc, ba = np.array(bc), np.array(ba)
-    lo, hi = (np.quantile(bc, [0.025, 0.975]) if len(bc) else (np.nan, np.nan))
+    lo, hi = np.quantile(bc, [0.025, 0.975]) if len(bc) else (np.nan, np.nan)
     verdict = m3_verdict(ic, strong, weak)
-    detail = {"author_icc": ia, "author_icc_ci": list(np.quantile(ba, [0.025, 0.975])) if len(ba) else None,
-              "var_content": r["var"][0], "var_author": r["var"][1], "var_resid": r["sigma2"],
-              "oneway_content_icc": oneway_icc(d[y].to_numpy(), d[content].to_numpy()),
-              "p_content_gt_author": float((bc > ba).mean()) if len(bc) else np.nan,
-              "n_content": int(d[content].nunique()), "n_author": int(d[author].nunique()),
-              "n_boot_ok": int(len(bc)), "converged": r["converged"], "thresholds": [weak, strong]}
+    detail = {
+        "author_icc": ia,
+        "author_icc_ci": list(np.quantile(ba, [0.025, 0.975])) if len(ba) else None,
+        "var_content": r["var"][0],
+        "var_author": r["var"][1],
+        "var_resid": r["sigma2"],
+        "oneway_content_icc": oneway_icc(d[y].to_numpy(), d[content].to_numpy()),
+        "p_content_gt_author": float((bc > ba).mean()) if len(bc) else np.nan,
+        "n_content": int(d[content].nunique()),
+        "n_author": int(d[author].nunique()),
+        "n_boot_ok": int(len(bc)),
+        "converged": r["converged"],
+        "thresholds": [weak, strong],
+    }
     return Result(name, float(ic), float(lo), float(hi), len(d), detail, verdict)
-
-

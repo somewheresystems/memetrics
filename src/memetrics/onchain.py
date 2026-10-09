@@ -32,11 +32,12 @@ The estimators are:
 
 No network calls and no project paths. Platform readers live in `memetrics.io.onchain`.
 """
+
 from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -47,10 +48,11 @@ from .units import hamming64
 STRIP_PREFIX = ("the ", "$")
 STRIP_SUFFIX = (" coin", " token", " on solana", " on sol", " sol")
 CRYPTO_WORDS = re.compile(r"\b(coin|coins|token|tokens|crypto|solana|pump|memecoin|shitcoin|dogecoin|bitcoin|nft)\b")
-_EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍\U000E0000-\U000E007F]")
+_EMOJI = re.compile("[\U0001f000-\U0001faff☀-➿️‍\U000e0000-\U000e007f]")
 
 
 # ------------------------------------------------------------------ names and catalogue matching
+
 
 def norm(s) -> str:
     """Normalise a name: NFKC, casefold, emoji and punctuation removed, whitespace collapsed."""
@@ -69,7 +71,7 @@ def strip_affixes(n: str) -> str:
         prev = n
         for p in STRIP_PREFIX:
             if n.startswith(p):
-                n = n[len(p):].strip()
+                n = n[len(p) :].strip()
         for x in STRIP_SUFFIX:
             if n.endswith(x):
                 n = n[: -len(x)].strip()
@@ -147,14 +149,16 @@ def attention_features(views: pd.Series, t: pd.Timestamp, long=(365, 31), recent
 
 # ------------------------------------------------------------------ families
 
+
 def _hours(ts: pd.Series) -> np.ndarray:
     """UTC timestamps as float hours since the epoch (NaT -> NaN), independent of the datetime unit."""
     t = pd.to_datetime(pd.Series(ts), utc=True)
     return ((t - pd.Timestamp(0, tz="UTC")) / pd.Timedelta(hours=1)).to_numpy(float)
 
 
-def find_relatives(offspring: pd.DataFrame, pool: pd.DataFrame, max_hamming: int = 6,
-                   min_ticker: int = 3) -> pd.DataFrame:
+def find_relatives(
+    offspring: pd.DataFrame, pool: pd.DataFrame, max_hamming: int = 6, min_ticker: int = 3
+) -> pd.DataFrame:
     """Find the earlier relatives of each offspring item in `pool`.
 
     A pool item is a relative if it has the same affix-stripped normalised name (`text`), the same normalised `ticker`
@@ -199,8 +203,12 @@ def find_relatives(offspring: pd.DataFrame, pool: pd.DataFrame, max_hamming: int
     return pd.DataFrame(rows, columns=["item_id", "rel_id", "via", "gap_h"])
 
 
-def assign_parents(rel: pd.DataFrame, fitness: Callable[[str, str], float] | None = None,
-                   min_gap_h: float = 24.0, rule: str = "fittest") -> pd.DataFrame:
+def assign_parents(
+    rel: pd.DataFrame,
+    fitness: Callable[[str, str], float] | None = None,
+    min_gap_h: float = 24.0,
+    rule: str = "fittest",
+) -> pd.DataFrame:
     """Choose one parent per offspring from its relatives.
 
     Relatives launched less than `min_gap_h` hours earlier are *siblings*: both probably copy a common external
@@ -222,17 +230,26 @@ def assign_parents(rel: pd.DataFrame, fitness: Callable[[str, str], float] | Non
             cand = cand[np.isfinite(cand.fit.astype(float))]
         else:
             cand["fit"] = np.nan
-        row = {"item_id": oid, "n_relatives": len(g), "n_siblings": len(sib), "parent": None,
-               "parent_fitness": np.nan, "parent_gap_h": np.nan, "parent_via": None}
+        row = {
+            "item_id": oid,
+            "n_relatives": len(g),
+            "n_siblings": len(sib),
+            "parent": None,
+            "parent_fitness": np.nan,
+            "parent_gap_h": np.nan,
+            "parent_via": None,
+        }
         if not cand.empty:
             best = cand.loc[cand.fit.idxmax()] if rule == "fittest" else cand.loc[cand.gap_h.idxmax()]
-            row.update(parent=best.rel_id, parent_fitness=float(best.fit), parent_gap_h=float(best.gap_h),
-                       parent_via=best.via)
+            row.update(
+                parent=best.rel_id, parent_fitness=float(best.fit), parent_gap_h=float(best.gap_h), parent_via=best.via
+            )
         out.append(row)
     return pd.DataFrame(out)
 
 
 # ------------------------------------------------------------------ inference
+
 
 def time_blocks(ts: pd.Series, freq: str = "W") -> np.ndarray:
     """Calendar blocks (default ISO weeks) used as bootstrap clusters."""
@@ -240,8 +257,7 @@ def time_blocks(ts: pd.Series, freq: str = "W") -> np.ndarray:
     return t.dt.to_period(freq).astype(str).to_numpy()
 
 
-def block_bootstrap(stat: Callable[[np.ndarray], float], blocks: np.ndarray, n_boot: int = 2000,
-                    seed: int = 0):
+def block_bootstrap(stat: Callable[[np.ndarray], float], blocks: np.ndarray, n_boot: int = 2000, seed: int = 0):
     """Cluster bootstrap that resamples whole blocks with replacement (Cameron, Gelbach & Miller 2008).
 
     Returns (point, 2.5th percentile, 97.5th percentile, share of draws ≤ 0, draws).
@@ -261,7 +277,8 @@ def block_bootstrap(stat: Callable[[np.ndarray], float], blocks: np.ndarray, n_b
 
 
 def ols_hc3(y, X):
-    """OLS with an intercept. Returns the coefficients (intercept first) and HC3 standard errors (MacKinnon & White 1985)."""
+    """OLS with an intercept. Returns the coefficients (intercept first) and HC3 standard errors
+    (MacKinnon & White 1985)."""
     y = np.asarray(y, float)
     X1 = np.column_stack([np.ones(len(y)), np.asarray(X, float).reshape(len(y), -1)])
     inv = np.linalg.pinv(X1.T @ X1)
@@ -272,10 +289,19 @@ def ols_hc3(y, X):
     return beta, np.sqrt(np.diag(inv @ meat @ inv))
 
 
-def heritability(items: pd.DataFrame, parent_col: str = "parent_fitness", y_col: str = "engagement",
-                 controls: list[str] | None = None, block_col: str | None = None, strata_col: str | None = None,
-                 n_boot: int = 2000, n_perm: int = 2000, seed: int = 0, alpha: float = 0.05,
-                 name: str = "b_PO") -> Result:
+def heritability(
+    items: pd.DataFrame,
+    parent_col: str = "parent_fitness",
+    y_col: str = "engagement",
+    controls: list[str] | None = None,
+    block_col: str | None = None,
+    strata_col: str | None = None,
+    n_boot: int = 2000,
+    n_perm: int = 2000,
+    seed: int = 0,
+    alpha: float = 0.05,
+    name: str = "b_PO",
+) -> Result:
     """Parent–offspring regression slope b_PO of offspring `y_col` on `parent_col`, given `controls`.
 
     Model: y = a + b_PO·parent + γ·controls + ε (OLS; Galton 1886; Falconer & Mackay 1996).
@@ -308,12 +334,23 @@ def heritability(items: pd.DataFrame, parent_col: str = "parent_fitness", y_col:
     p_null = float((null >= b).mean())
     beta, se = ols_hc3(y, np.column_stack([par, Z]))
     verdict = "heritable" if (lo > 0 and p_null < alpha / 2) else "not heritable"
-    return Result(name, float(b), lo, hi, int(len(y)),
-                  {"p_boot_le0": p_boot, "null_q975": float(np.quantile(null, 0.975)), "p_null": p_null,
-                   "se_hc3": float(se[1]), "controls": list(controls or []),
-                   "coef": dict(zip(["intercept", parent_col] + list(controls or []), map(float, beta))),
-                   "se": dict(zip(["intercept", parent_col] + list(controls or []), map(float, se)))},
-                  verdict)
+    return Result(
+        name,
+        float(b),
+        lo,
+        hi,
+        int(len(y)),
+        {
+            "p_boot_le0": p_boot,
+            "null_q975": float(np.quantile(null, 0.975)),
+            "p_null": p_null,
+            "se_hc3": float(se[1]),
+            "controls": list(controls or []),
+            "coef": dict(zip(["intercept", parent_col] + list(controls or []), map(float, beta))),
+            "se": dict(zip(["intercept", parent_col] + list(controls or []), map(float, se))),
+        },
+        verdict,
+    )
 
 
 def heritability_verdict(plain: Result, attention_adjusted: Result, attention_terms: dict[str, Result]) -> str:
@@ -333,8 +370,16 @@ def heritability_verdict(plain: Result, attention_adjusted: Result, attention_te
     return "ambiguous"
 
 
-def coef_ci(d: pd.DataFrame, y_col: str, terms: list[str], controls: list[str], blocks: np.ndarray,
-            n_boot: int = 2000, seed: int = 0, logistic: bool = False) -> dict[str, Result]:
+def coef_ci(
+    d: pd.DataFrame,
+    y_col: str,
+    terms: list[str],
+    controls: list[str],
+    blocks: np.ndarray,
+    n_boot: int = 2000,
+    seed: int = 0,
+    logistic: bool = False,
+) -> dict[str, Result]:
     """Block-bootstrap CIs for the coefficients of `terms` in a regression of `y_col` on terms + controls.
 
     The regression is OLS, or an unpenalised logit fit by Newton's method (statsmodels-free) when `logistic`.
@@ -351,7 +396,7 @@ def coef_ci(d: pd.DataFrame, y_col: str, terms: list[str], controls: list[str], 
 
     out = {}
     for j, t in enumerate(terms):
-        b, lo, hi, p, _ = block_bootstrap(lambda idx: fit(idx)[1 + j], blocks, n_boot, seed + j)
+        b, lo, hi, p, _ = block_bootstrap(lambda idx, j=j: fit(idx)[1 + j], blocks, n_boot, seed + j)
         v = "positive" if lo > 0 else "negative" if hi < 0 else "null"
         out[t] = Result(t, b, lo, hi, len(y), {"p_le0": p, "model": "logit" if logistic else "ols"}, v)
     return out

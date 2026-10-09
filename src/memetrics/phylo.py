@@ -15,6 +15,7 @@ taxa, sequence length and mean pairwise distance (per-branch rate tuned by bisec
   ``network``    the same, then each taxon recombines with another taxon (splice at a random point) with prob. 0.5;
   ``star``       every taxon mutated independently from one ancestor (a shared template, no shared descent).
 """
+
 from __future__ import annotations
 
 import itertools
@@ -129,10 +130,14 @@ def _mean_dist(seqs) -> float:
     from rapidfuzz.distance import Levenshtein
 
     n = len(seqs)
-    return float(np.mean([Levenshtein.normalized_distance(seqs[i], seqs[j]) for i in range(n) for j in range(i + 1, n)]))
+    return float(
+        np.mean([Levenshtein.normalized_distance(seqs[i], seqs[j]) for i in range(n) for j in range(i + 1, n)])
+    )
 
 
-def calibrate_rate(kind: str, n: int, length: int, target: float, seed: int = 0, iters: int = 14, pilot: int = 6) -> float:
+def calibrate_rate(
+    kind: str, n: int, length: int, target: float, seed: int = 0, iters: int = 14, pilot: int = 6
+) -> float:
     """Bisection on the rate so the expected mean pairwise distance matches ``target``."""
     lo, hi = 1e-4, 1.0 if kind == "star" else 20.0
     for _ in range(iters):
@@ -176,7 +181,20 @@ def tree_likeness(D: np.ndarray, length: int, reps: int = 100, seed: int = 0, na
     else:
         v = "ambiguous"
     pct = {k: float((refs[k][:, 0] < d_obs).mean()) for k in refs}
-    return Result(name, d_obs, np.nan, np.nan, n,
-                  {"q_residual": q_obs, "mean_dist": target, "pct_in_ref": pct,
-                   "ref_mean": {k: float(refs[k][:, 0].mean()) for k in refs}, "tree_q95": float(t95),
-                   "network_q05": float(n05), "star_q05_q95": (float(s05), float(s95))}, v)
+    return Result(
+        name,
+        d_obs,
+        np.nan,
+        np.nan,
+        n,
+        {
+            "q_residual": q_obs,
+            "mean_dist": target,
+            "pct_in_ref": pct,
+            "ref_mean": {k: float(refs[k][:, 0].mean()) for k in refs},
+            "tree_q95": float(t95),
+            "network_q05": float(n05),
+            "star_q05_q95": (float(s05), float(s95)),
+        },
+        v,
+    )

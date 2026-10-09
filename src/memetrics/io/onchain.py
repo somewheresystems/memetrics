@@ -16,23 +16,36 @@ from . import hash_author
 SUPPLY = 1e9  # Pump.fun tokens have 1e9 whole tokens
 
 
-def to_items(launches: pd.DataFrame, salt: str, *, id_col="mint", ts_col="created_at", author_col="creator",
-             name_col="name", ticker_col="symbol", phash_col=None, topic_col=None, engagement_col=None,
-             community: str = "pumpfun") -> pd.DataFrame:
+def to_items(
+    launches: pd.DataFrame,
+    salt: str,
+    *,
+    id_col="mint",
+    ts_col="created_at",
+    author_col="creator",
+    name_col="name",
+    ticker_col="symbol",
+    phash_col=None,
+    topic_col=None,
+    engagement_col=None,
+    community: str = "pumpfun",
+) -> pd.DataFrame:
     """Map a launch table to the memetrics items table (`kind="token"`).
 
     The token-specific columns `ticker` and `topic` are kept. A pHash given as a hex string is parsed to uint64.
     """
     d = launches
-    out = pd.DataFrame({
-        "item_id": d[id_col].astype(str).to_numpy(),
-        "ts": pd.to_datetime(d[ts_col], utc=True, format="ISO8601").to_numpy(),
-        "author": [hash_author(a, salt) if isinstance(a, str) else None for a in d[author_col]],
-        "community": community,
-        "kind": "token",
-        "text": d[name_col].to_numpy(),
-        "ticker": d[ticker_col].to_numpy(),
-    })
+    out = pd.DataFrame(
+        {
+            "item_id": d[id_col].astype(str).to_numpy(),
+            "ts": pd.to_datetime(d[ts_col], utc=True, format="ISO8601").to_numpy(),
+            "author": [hash_author(a, salt) if isinstance(a, str) else None for a in d[author_col]],
+            "community": community,
+            "kind": "token",
+            "text": d[name_col].to_numpy(),
+            "ticker": d[ticker_col].to_numpy(),
+        }
+    )
     out["ts"] = pd.to_datetime(out["ts"], utc=True)
     if phash_col:
         out["phash"] = [np.uint64(int(h, 16)) if isinstance(h, str) and h else np.nan for h in d[phash_col]]

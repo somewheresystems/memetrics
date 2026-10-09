@@ -22,7 +22,8 @@ Observation layers
   never appears publicly, and its likes are invisible. Its public descendants keep their text, but their source
   is hidden.
 - ``recommender``: True ranks followee posts by log(1 + likes) plus noise and adds a few slots from a global
-  trending pool (a toy engagement ranker). False gives a chronological followee feed. The ranker changes the world itself: who sees what.
+  trending pool (a toy engagement ranker). False gives a chronological followee feed. The ranker changes the
+  world itself: who sees what.
 - exposure censoring: impressions are never part of the observed table.
 - ``deletion``: each public post is deleted with this probability, doubled in the bottom engagement quartile.
 - ``edge_mode``: how observed parents are formed. ``explicit``: the true parent if it is observed, else no edge
@@ -41,6 +42,7 @@ Quick use
 
 All randomness flows from ``seed``. Pure numpy/pandas; no network access.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -57,6 +59,7 @@ PROCESSES = ("replicator", "attraction", "neutral", "contagion")
 @dataclass(frozen=True)
 class WorldParams:
     """World settings. The defaults are those of the simulation study in the accompanying paper."""
+
     n_agents: int = 3000
     mean_out_degree: int = 20
     indegree_exponent: float = 2.5
@@ -64,16 +67,16 @@ class WorldParams:
     text_len: int = 15
     vocab: int = 2000
     steps: int = 60
-    seed_window: int = 10           # units are seeded in the first `seed_window` steps
+    seed_window: int = 10  # units are seeded in the first `seed_window` steps
     seeds_per_unit: int = 6
-    activity: float = 0.5           # probability an agent is active in a step
-    background_rate: float = 0.15   # probability an active agent writes a non-meme post
+    activity: float = 0.5  # probability an agent is active in a step
+    background_rate: float = 0.15  # probability an active agent writes a non-meme post
     feed_k: int = 10
-    recent_window: int = 3          # feeds draw from posts of the last `recent_window` steps
-    trending_pool: int = 30         # size of the global trending pool (recommender on)
-    trending_slots: int = 3         # trending posts added to each feed (recommender on)
-    rank_weight: float = 1.0        # weight of log(1 + likes) against Gumbel(0, 1) noise in the ranker
-    inbox_size: int = 3             # recipients of a private share
+    recent_window: int = 3  # feeds draw from posts of the last `recent_window` steps
+    trending_pool: int = 30  # size of the global trending pool (recommender on)
+    trending_slots: int = 3  # trending posts added to each feed (recommender on)
+    rank_weight: float = 1.0  # weight of log(1 + likes) against Gumbel(0, 1) noise in the ranker
+    inbox_size: int = 3  # recipients of a private share
     like_base: float = 0.08
     share_base: float = 0.035
     contagion_share: float = 0.12
@@ -115,8 +118,13 @@ def _follow_graph(P: WorldParams, rng: np.random.Generator) -> tuple[list[np.nda
     return following, [np.array(x, dtype=np.int64) for x in followers]
 
 
-def simulate(process: str, p_private: float = 0.0, recommender: bool = True, seed: int = 20261008,
-             params: WorldParams | None = None) -> pd.DataFrame:
+def simulate(
+    process: str,
+    p_private: float = 0.0,
+    recommender: bool = True,
+    seed: int = 20261008,
+    params: WorldParams | None = None,
+) -> pd.DataFrame:
     """Run one ground-truth world. Returns the full log (one row per post, incl. private and background posts)
     with true parents, private flags, likes (public/private, with like times) and true fitness."""
     if process not in PROCESSES:
@@ -135,15 +143,23 @@ def simulate(process: str, p_private: float = 0.0, recommender: bool = True, see
     # post store (python lists; converted at the end)
     author, unit, step_of, parent, private, fit, toks = [], [], [], [], [], [], []
     likes_pub, likes_priv, like_times = [], [], []
-    recent: dict[int, list[int]] = {}          # author -> recent public post ids
+    recent: dict[int, list[int]] = {}  # author -> recent public post ids
     inbox: list[list[int]] = [[] for _ in range(n)]
     adopted = [set() for _ in range(n)]
-    exposure: list[dict] = [dict() for _ in range(n)]   # unit -> set of authors (contagion)
+    exposure: list[dict] = [dict() for _ in range(n)]  # unit -> set of authors (contagion)
 
     def new_post(a, u, t, par, priv, f, tk):
         pid = len(author)
-        author.append(a); unit.append(u); step_of.append(t); parent.append(par); private.append(priv)
-        fit.append(f); toks.append(tk); likes_pub.append(0); likes_priv.append(0); like_times.append([])
+        author.append(a)
+        unit.append(u)
+        step_of.append(t)
+        parent.append(par)
+        private.append(priv)
+        fit.append(f)
+        toks.append(tk)
+        likes_pub.append(0)
+        likes_priv.append(0)
+        like_times.append([])
         if not priv:
             recent.setdefault(a, []).append(pid)
         return pid
@@ -157,7 +173,11 @@ def simulate(process: str, p_private: float = 0.0, recommender: bool = True, see
         # seeding: a unit appears at several followees of one agent (so complex contagion can start)
         for u in by_step_seed.get(t, []):
             hub = int(rng.integers(n))
-            cands = following[hub] if len(following[hub]) >= P.seeds_per_unit else rng.choice(n, P.seeds_per_unit, replace=False)
+            cands = (
+                following[hub]
+                if len(following[hub]) >= P.seeds_per_unit
+                else rng.choice(n, P.seeds_per_unit, replace=False)
+            )
             for a in rng.choice(cands, min(P.seeds_per_unit, len(cands)), replace=False):
                 a = int(a)
                 new_post(a, u, t, -1, False, float(unit_fit[u]), seeds[u].copy())
@@ -171,26 +191,29 @@ def simulate(process: str, p_private: float = 0.0, recommender: bool = True, see
         if recommender:
             pool = [p for ps in recent.values() for p in ps]
             if pool:
-                sc = P.rank_weight * np.log1p(np.array([likes_pub[p] for p in pool], float)) \
-                    + rng.gumbel(0, 1, len(pool))
-                trending = [pool[i] for i in np.argsort(-sc)[:P.trending_pool]]
+                sc = P.rank_weight * np.log1p(np.array([likes_pub[p] for p in pool], float)) + rng.gumbel(
+                    0, 1, len(pool)
+                )
+                trending = [pool[i] for i in np.argsort(-sc)[: P.trending_pool]]
         active = np.flatnonzero(rng.random(n) < P.activity)
         new_inbox: list[list[int]] = [[] for _ in range(n)]
         for a in active:
             a = int(a)
             cand = [p for f in following[a] for p in recent.get(int(f), ())]
             if len(cand) > P.feed_k:
-                if recommender:   # engagement-ranked followee posts
-                    sc = P.rank_weight * np.log1p(np.array([likes_pub[p] for p in cand], float)) \
-                        + rng.gumbel(0, 1, len(cand))
-                else:             # chronological
+                if recommender:  # engagement-ranked followee posts
+                    sc = P.rank_weight * np.log1p(np.array([likes_pub[p] for p in cand], float)) + rng.gumbel(
+                        0, 1, len(cand)
+                    )
+                else:  # chronological
                     sc = np.array([step_of[p] for p in cand], float) + rng.random(len(cand))
-                cand = [cand[i] for i in np.argsort(-sc)[:P.feed_k]]
+                cand = [cand[i] for i in np.argsort(-sc)[: P.feed_k]]
             if recommender and trending:  # a few slots of globally trending posts
-                extra = [trending[i] for i in rng.choice(len(trending), min(P.trending_slots, len(trending)),
-                                                          replace=False)]
+                extra = [
+                    trending[i] for i in rng.choice(len(trending), min(P.trending_slots, len(trending)), replace=False)
+                ]
                 cand = cand + [p for p in extra if p not in cand]
-            seen = inbox[a] + cand            # private inbox items are always seen first
+            seen = inbox[a] + cand  # private inbox items are always seen first
             shared = False
             for p in seen:
                 if author[p] == a:
@@ -243,22 +266,41 @@ def simulate(process: str, p_private: float = 0.0, recommender: bool = True, see
     t0 = pd.Timestamp("2020-01-01", tz="UTC")
     jitter = rng.random(len(author))
     ts = t0 + pd.to_timedelta(np.array(step_of) + jitter, unit="D")
-    return pd.DataFrame({
-        "item_id": [f"p{i}" for i in range(len(author))], "ts": ts, "step": step_of,
-        "author": [f"a{a}" for a in author], "author_followers": [len(followers[a]) for a in author],
-        "unit": [f"u{u}" if u >= 0 else None for u in unit],
-        "text": [" ".join(f"w{x}" for x in tk) for tk in toks],
-        "true_parent": [f"p{p}" if p >= 0 else None for p in parent],
-        "private": private, "likes_public": likes_pub, "likes_private": likes_priv,
-        "like_times": like_times, "fitness": fit, "process": process, "p_private": p_private,
-        "recommender": recommender, "community": "sim", "kind": "text"})
+    return pd.DataFrame(
+        {
+            "item_id": [f"p{i}" for i in range(len(author))],
+            "ts": ts,
+            "step": step_of,
+            "author": [f"a{a}" for a in author],
+            "author_followers": [len(followers[a]) for a in author],
+            "unit": [f"u{u}" if u >= 0 else None for u in unit],
+            "text": [" ".join(f"w{x}" for x in tk) for tk in toks],
+            "true_parent": [f"p{p}" if p >= 0 else None for p in parent],
+            "private": private,
+            "likes_public": likes_pub,
+            "likes_private": likes_priv,
+            "like_times": like_times,
+            "fitness": fit,
+            "process": process,
+            "p_private": p_private,
+            "recommender": recommender,
+            "community": "sim",
+            "kind": "text",
+        }
+    )
 
 
 # =============================================================== observation
 
 
-def observe(log: pd.DataFrame, edge_mode: str = "explicit", deletion: float = 0.05, horizon: int = 5,
-            full: bool = False, seed: int = 20261008) -> pd.DataFrame:
+def observe(
+    log: pd.DataFrame,
+    edge_mode: str = "explicit",
+    deletion: float = 0.05,
+    horizon: int = 5,
+    full: bool = False,
+    seed: int = 20261008,
+) -> pd.DataFrame:
     """Turn a ground-truth log into the items table a researcher would see.
 
     full=True returns the ground truth instead: all posts incl. private ones, true parents, and engagement =
@@ -360,8 +402,9 @@ def _n1(items: pd.DataFrame, n_boot: int = 300, seed: int = 20261008) -> Result 
     first = gu.ts.transform("min")
     m["unit_age"] = (m.ts - first).dt.total_seconds() / 3600
     pt = dict(zip(d.item_id, d.text))
-    m["mut_dist"] = [1 - text.sim_edit(t, pt[p]) if isinstance(p, str) and p in pt else 0.0
-                     for t, p in zip(m.text, m.parent)]
+    m["mut_dist"] = [
+        1 - text.sim_edit(t, pt[p]) if isinstance(p, str) and p in pt else 0.0 for t, p in zip(m.text, m.parent)
+    ]
     m = m[m.prior_n >= 1]
     if len(m) < 200:
         return None
@@ -372,15 +415,23 @@ def _n1(items: pd.DataFrame, n_boot: int = 300, seed: int = 20261008) -> Result 
     te["hit"] = (te.engagement > thr).astype(int)
     if tr.hit.nunique() < 2 or te.hit.nunique() < 2:
         return None
-    blocks = {"B": ["log_followers", "author_prior_mean", "author_prior_n", "t"],
-              "CA": ["log_prior_n", "log_prior_eng"], "M": ["unit_fitness", "unit_age", "mut_dist"]}
-    r = predict.nested_compare(tr, te, "hit", blocks, [(["B", "CA"], ["M"])], cluster="unit",
-                               n_boot=n_boot, seed=seed)
+    blocks = {
+        "B": ["log_followers", "author_prior_mean", "author_prior_n", "t"],
+        "CA": ["log_prior_n", "log_prior_eng"],
+        "M": ["unit_fitness", "unit_age", "mut_dist"],
+    }
+    r = predict.nested_compare(tr, te, "hit", blocks, [(["B", "CA"], ["M"])], cluster="unit", n_boot=n_boot, seed=seed)
     return r[0]
 
 
-def evaluate(items: pd.DataFrame, null_sims: int = 0, n_boot: int = 300, m4_null: int = 200,
-             seed: int = 20261008, which: tuple = ("M1", "M2", "M3", "M4", "M5", "N1")) -> dict:
+def evaluate(
+    items: pd.DataFrame,
+    null_sims: int = 0,
+    n_boot: int = 300,
+    m4_null: int = 200,
+    seed: int = 20261008,
+    which: tuple = ("M1", "M2", "M3", "M4", "M5", "N1"),
+) -> dict:
     """All metrics on an items table (columns of the common data model plus `author_followers` for N1).
     Returns {name: Result}; metrics whose data requirements are not met are omitted."""
     out: dict = {}
@@ -395,25 +446,42 @@ def evaluate(items: pd.DataFrame, null_sims: int = 0, n_boot: int = 300, m4_null
             dp = chains.depth_profile(memes)
             pr = chains.price_decomposition(memes, meds)
             share = float((pr.transmission.abs() > pr.selection.abs()).mean()) if len(pr) else np.nan
-            out["M6"] = Result("M6 Price (share |transmission| > |selection|)", share, np.nan, np.nan, len(pr),
-                               {"median_selection": float(pr.selection.median()) if len(pr) else np.nan,
-                                "median_transmission": float(pr.transmission.median()) if len(pr) else np.nan,
-                                "depth_saturation_ratio": dp["saturation_ratio"],
-                                "depth_slope_early": dp["slope_early"], "depth_slope_late": dp["slope_late"]}, None)
+            out["M6"] = Result(
+                "M6 Price (share |transmission| > |selection|)",
+                share,
+                np.nan,
+                np.nan,
+                len(pr),
+                {
+                    "median_selection": float(pr.selection.median()) if len(pr) else np.nan,
+                    "median_transmission": float(pr.transmission.median()) if len(pr) else np.nan,
+                    "depth_saturation_ratio": dp["saturation_ratio"],
+                    "depth_slope_early": dp["slope_early"],
+                    "depth_slope_late": dp["slope_late"],
+                },
+                None,
+            )
     if "M3" in which:
         m = _m3_frame(items)
         if m.content.nunique() >= 10 and m.author.nunique() >= 10:
             try:
-                out["M3"] = fitness.content_icc(m, y="y", content="content", author="author",
-                                                fixed=["log_order", "author_base", "author_new"],
-                                                n_boot=n_boot, seed=seed)
+                out["M3"] = fitness.content_icc(
+                    m,
+                    y="y",
+                    content="content",
+                    author="author",
+                    fixed=["log_order", "author_base", "author_new"],
+                    n_boot=n_boot,
+                    seed=seed,
+                )
             except Exception as ex:  # noqa: BLE001
                 out["M3_error"] = str(ex)
     if "M4" in which:
         tr = _trajectories(memes)
         if len(tr) >= 3:
-            out["M4"] = selection.fit_calibrated(tr, Ne_grid=(100, 1000, 10000), reps=m4_null, n_sets=500,
-                                                 s_grid=(), seed=seed)
+            out["M4"] = selection.fit_calibrated(
+                tr, Ne_grid=(100, 1000, 10000), reps=m4_null, n_sets=500, s_grid=(), seed=seed
+            )
     if "M5" in which:
         ds = []
         for _, g in memes.groupby("unit"):
@@ -468,38 +536,69 @@ def _flatten(res: dict) -> dict:
         for dk, dv in r.detail.items():
             if isinstance(dv, (int, float, str, bool, np.floating, np.integer)) or dv is None:
                 row[f"{k}_{dk}"] = dv
-            elif isinstance(dv, (list, tuple)) and len(dv) == 2 and all(isinstance(x, (int, float, np.floating)) for x in dv):
+            elif (
+                isinstance(dv, (list, tuple))
+                and len(dv) == 2
+                and all(isinstance(x, (int, float, np.floating)) for x in dv)
+            ):
                 row[f"{k}_{dk}_lo"], row[f"{k}_{dk}_hi"] = dv
     return row
 
 
-def run_one(process: str, p_private: float, recommender: bool, rep: int, base_seed: int = 20261008,
-            params: WorldParams | None = None, edge_modes=("explicit", "ancestor", "inferred"),
-            null_sims: int = 0, n_boot: int = 200, m4_null: int = 100, deletion: float = 0.05) -> list[dict]:
+def run_one(
+    process: str,
+    p_private: float,
+    recommender: bool,
+    rep: int,
+    base_seed: int = 20261008,
+    params: WorldParams | None = None,
+    edge_modes=("explicit", "ancestor", "inferred"),
+    null_sims: int = 0,
+    n_boot: int = 200,
+    m4_null: int = 100,
+    deletion: float = 0.05,
+) -> list[dict]:
     """One world: ground truth plus each edge mode's observed metrics. Returns tidy rows."""
     seed = base_seed + rep
     log = simulate(process, p_private, recommender, seed, params)
     rows = []
-    layers = [("truth", observe(log, full=True))] + [(m, observe(log, m, deletion=deletion, seed=seed)) for m in edge_modes]
+    layers = [("truth", observe(log, full=True))] + [
+        (m, observe(log, m, deletion=deletion, seed=seed)) for m in edge_modes
+    ]
     for layer, items in layers:
         res = evaluate(items, null_sims=null_sims, n_boot=n_boot, m4_null=m4_null, seed=seed)
-        row = {"process": process, "p_private": p_private, "recommender": recommender, "rep": rep, "layer": layer,
-               "n_items": len(items), "n_meme_items": int(items.unit.notna().sum()),
-               "share_private": float(log.private.mean()), "inferred": composite(res),
-               "inferred_calibrated": composite(res, calibrated=True) if null_sims else None}
+        row = {
+            "process": process,
+            "p_private": p_private,
+            "recommender": recommender,
+            "rep": rep,
+            "layer": layer,
+            "n_items": len(items),
+            "n_meme_items": int(items.unit.notna().sum()),
+            "share_private": float(log.private.mean()),
+            "inferred": composite(res),
+            "inferred_calibrated": composite(res, calibrated=True) if null_sims else None,
+        }
         row.update(_flatten(res))
         rows.append(row)
     return rows
 
 
-def sweep(processes=PROCESSES, p_grid=(0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9), recommender=(True, False),
-          reps: int = 30, workers: int = 1, **kw) -> pd.DataFrame:
+def sweep(
+    processes=PROCESSES,
+    p_grid=(0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9),
+    recommender=(True, False),
+    reps: int = 30,
+    workers: int = 1,
+    **kw,
+) -> pd.DataFrame:
     """Full factorial sweep; `workers` > 1 uses a process pool. Extra keywords go to `run_one`."""
     jobs = [(pr, p, r, i) for pr in processes for p in p_grid for r in recommender for i in range(reps)]
     if workers <= 1:
         rows = [x for j in jobs for x in run_one(*j, **kw)]
     else:
         from concurrent.futures import ProcessPoolExecutor
+
         with ProcessPoolExecutor(workers) as ex:
             futs = [ex.submit(run_one, *j, **kw) for j in jobs]
             rows = [x for f in futs for x in f.result()]
@@ -509,13 +608,23 @@ def sweep(processes=PROCESSES, p_grid=(0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9), recom
 def confusion(df: pd.DataFrame, layer: str = "explicit", col: str = "inferred") -> pd.DataFrame:
     """Row-normalized confusion matrix (true process x inferred label) per p_private."""
     d = df[df.layer == layer]
-    return (d.groupby(["p_private", "process"])[col].value_counts(normalize=True)
-            .rename("share").reset_index()
-            .pivot_table(index=["p_private", "process"], columns=col, values="share", fill_value=0.0))
+    return (
+        d.groupby(["p_private", "process"])[col]
+        .value_counts(normalize=True)
+        .rename("share")
+        .reset_index()
+        .pivot_table(index=["p_private", "process"], columns=col, values="share", fill_value=0.0)
+    )
 
 
-def breakdown_fraction(df: pd.DataFrame, a: str = "replicator", b: str = "attraction", layer: str = "explicit",
-                       col: str = "inferred", threshold: float = 0.8) -> float:
+def breakdown_fraction(
+    df: pd.DataFrame,
+    a: str = "replicator",
+    b: str = "attraction",
+    layer: str = "explicit",
+    col: str = "inferred",
+    threshold: float = 0.8,
+) -> float:
     """Smallest p_private at which the balanced accuracy for telling `a` from `b` falls below `threshold`.
     Accuracy for each process is the share of its worlds labelled with its own name; nan if never below."""
     d = df[(df.layer == layer) & df.process.isin([a, b])]
@@ -526,9 +635,15 @@ def breakdown_fraction(df: pd.DataFrame, a: str = "replicator", b: str = "attrac
     return float("nan")
 
 
-def distinguishability(p_private: float, reps: int = 10, recommender: bool = True,
-                       params: WorldParams | None = None, edge_mode: str = "explicit", workers: int = 1,
-                       **kw) -> pd.DataFrame:
+def distinguishability(
+    p_private: float,
+    reps: int = 10,
+    recommender: bool = True,
+    params: WorldParams | None = None,
+    edge_mode: str = "explicit",
+    workers: int = 1,
+    **kw,
+) -> pd.DataFrame:
     """For a planned study: simulate each process at the given private-share fraction and return the confusion
     matrix of the composite decision rule on the observed layer. Use `params` to match your data's scale
     (number of units, agents, steps)."""
@@ -536,5 +651,17 @@ def distinguishability(p_private: float, reps: int = 10, recommender: bool = Tru
     return confusion(df, layer=edge_mode)
 
 
-__all__ = ["WorldParams", "PROCESSES", "params_for_size", "simulate", "observe", "evaluate", "composite", "run_one",
-           "sweep", "confusion", "breakdown_fraction", "distinguishability"]
+__all__ = [
+    "WorldParams",
+    "PROCESSES",
+    "params_for_size",
+    "simulate",
+    "observe",
+    "evaluate",
+    "composite",
+    "run_one",
+    "sweep",
+    "confusion",
+    "breakdown_fraction",
+    "distinguishability",
+]

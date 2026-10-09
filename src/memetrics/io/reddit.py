@@ -82,14 +82,22 @@ def to_items(posts: Iterable[dict], salt: str | None = None, image_info: dict | 
         a = x.get("author")
         url, _ = image_candidates(x)
         info = image_info.get(x["id"], {})
-        rows.append({
-            "item_id": x["id"], "ts": pd.to_datetime(int(x["created_utc"]), unit="s", utc=True),
-            "author": None if a in (None, "[deleted]") else hash_author(a, salt),
-            "community": x.get("subreddit"), "kind": "image" if url else "text",
-            "text": info.get("text", x.get("title")), "phash": info.get("phash"),
-            "parent": (x.get("crosspost_parent") or "").removeprefix("t3_") or None,
-            "engagement": x.get("score"), "num_comments": x.get("num_comments"),
-            "removed": x.get("removed_by_category") is not None, "image_url": url})
+        rows.append(
+            {
+                "item_id": x["id"],
+                "ts": pd.to_datetime(int(x["created_utc"]), unit="s", utc=True),
+                "author": None if a in (None, "[deleted]") else hash_author(a, salt),
+                "community": x.get("subreddit"),
+                "kind": "image" if url else "text",
+                "text": info.get("text", x.get("title")),
+                "phash": info.get("phash"),
+                "parent": (x.get("crosspost_parent") or "").removeprefix("t3_") or None,
+                "engagement": x.get("score"),
+                "num_comments": x.get("num_comments"),
+                "removed": x.get("removed_by_category") is not None,
+                "image_url": url,
+            }
+        )
     return conform(pd.DataFrame(rows))
 
 
@@ -141,8 +149,9 @@ def _get(url: str, min_interval: float, state: dict, retries: int = 8) -> dict: 
     raise RuntimeError(f"Arctic Shift request failed after {retries} attempts: {url}")
 
 
-def fetch_posts(subreddit: str, after: str, before: str, cache_dir: str | Path,
-                min_interval: float = 1.0) -> Iterator[dict]:  # pragma: no cover - network
+def fetch_posts(
+    subreddit: str, after: str, before: str, cache_dir: str | Path, min_interval: float = 1.0
+) -> Iterator[dict]:  # pragma: no cover - network
     """Submissions of ``subreddit`` created in [after, before) (ISO dates), oldest first, from the Arctic Shift API.
 
     Pages of 100 are cached as ``<cache_dir>/<subreddit>/<after-epoch>.json``; cached pages are never re-requested.
@@ -159,8 +168,7 @@ def fetch_posts(subreddit: str, after: str, before: str, cache_dir: str | Path,
         if page.exists():
             data = json.loads(page.read_text())
         else:
-            q = urllib.parse.urlencode({"subreddit": subreddit, "after": t, "before": end, "limit": 100,
-                                        "sort": "asc"})
+            q = urllib.parse.urlencode({"subreddit": subreddit, "after": t, "before": end, "limit": 100, "sort": "asc"})
             data = _get(f"{ARCTIC_SHIFT}/posts/search?{q}", min_interval, state).get("data") or []
             page.write_text(json.dumps(data))
         if not data:

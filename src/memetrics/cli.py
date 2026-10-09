@@ -74,8 +74,7 @@ def cmd_units(a) -> None:
 
     items = read_items(a.items)
     emb = np.load(a.emb) if a.emb else None
-    out = units.assign(items, a.method, emb=emb, tau=a.tau, min_size=a.min_size, max_hamming=a.max_hamming,
-                       seed=a.seed)
+    out = units.assign(items, a.method, emb=emb, tau=a.tau, min_size=a.min_size, max_hamming=a.max_hamming, seed=a.seed)
     sizes = out.unit.value_counts()
     print(f"{len(sizes):,} units with >= {a.min_size} items cover {out.unit.notna().mean():.0%} of items")
     _done(out, a.out or a.items)
@@ -106,11 +105,19 @@ def cmd_scorecard(a) -> None:
 
         print("assigning units (method auto)")
         items = units.assign(items, emb=emb)
-    card = scorecard.run(items, emb, rules=_rules(a.rule), effort=scorecard.Effort.fast() if a.fast
-                         else scorecard.Effort(), seed=a.seed, which=tuple(a.only or ("M1", "M2", "M3", "M4", "M5",
-                                                                                        "N1")),
-                         lag_hours=a.lag_hours, p_private=a.p_private, distinguish_reps=a.reps, workers=a.workers,
-                         progress=lambda s: print(s, flush=True))
+    card = scorecard.run(
+        items,
+        emb,
+        rules=_rules(a.rule),
+        effort=scorecard.Effort.fast() if a.fast else scorecard.Effort(),
+        seed=a.seed,
+        which=tuple(a.only or ("M1", "M2", "M3", "M4", "M5", "N1")),
+        lag_hours=a.lag_hours,
+        p_private=a.p_private,
+        distinguish_reps=a.reps,
+        workers=a.workers,
+        progress=lambda s: print(s, flush=True),
+    )
     paths = report.write(card, a.out)
     for m in card["measures"]:
         verdicts = "; ".join(f"{r['label']}: {r['literal'] or '-'} / {r['calibrated'] or '-'}" for r in m["rows"])
@@ -128,8 +135,7 @@ def cmd_simulate(a) -> None:
     params = ob.params_for_size(a.n_items) if a.n_items else ob.WorldParams(n_agents=a.agents)
     log = ob.simulate(a.process, a.p_private, recommender=not a.no_recommender, seed=a.seed, params=params)
     obs = ob.observe(log, a.edge_mode, deletion=a.deletion, seed=a.seed)
-    cols = ["item_id", "ts", "author", "community", "kind", "text", "unit", "parent", "engagement",
-            "author_followers"]
+    cols = ["item_id", "ts", "author", "community", "kind", "text", "unit", "parent", "engagement", "author_followers"]
     obs = obs[cols].assign(author=[hash_author(x, "memetrics-simulation") for x in obs.author])
     if a.truth:
         write_items(log.drop(columns=["like_times"]), a.truth)
@@ -140,12 +146,19 @@ def cmd_simulate(a) -> None:
 def cmd_distinguishability(a) -> None:
     from .scorecard import distinguishability
 
-    r = distinguishability(a.n_items, a.p_private, a.reps, recommender=not a.no_recommender, edge_mode=a.edge_mode,
-                           seed=a.seed, workers=a.workers, fast=not a.full)
+    r = distinguishability(
+        a.n_items,
+        a.p_private,
+        a.reps,
+        recommender=not a.no_recommender,
+        edge_mode=a.edge_mode,
+        seed=a.seed,
+        workers=a.workers,
+        fast=not a.full,
+    )
     for col, title in (("inferred", "literal rules"), ("inferred_calibrated", "calibrated rules")):
         cm = pd.DataFrame(r[col]["confusion"]).T.fillna(0.0)
-        print(f"\n{title}: balanced accuracy {r[col]['balanced_accuracy']:.0%} "
-              f"(rows: true process, columns: inferred)")
+        print(f"\n{title}: balanced accuracy {r[col]['balanced_accuracy']:.0%} (rows: true process, columns: inferred)")
         print((cm * 100).round(0).astype(int).to_string())
     if a.json:
         Path(a.json).write_text(json.dumps(r, indent=1))

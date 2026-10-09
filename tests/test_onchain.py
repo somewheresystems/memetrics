@@ -1,10 +1,20 @@
 """Simulation tests for memetrics.onchain: heritability recovery, the attention-chasing rule, families, matching."""
+
 import numpy as np
 import pandas as pd
 
 from memetrics.io.onchain import activity_before, candles_frame, peak_to_date, to_items
-from memetrics.onchain import (assign_parents, attention_features, build_alias_index, find_relatives,
-                               heritability, heritability_verdict, match_catalogue, norm, strip_affixes)
+from memetrics.onchain import (
+    assign_parents,
+    attention_features,
+    build_alias_index,
+    find_relatives,
+    heritability,
+    heritability_verdict,
+    match_catalogue,
+    norm,
+    strip_affixes,
+)
 
 
 def _families(n=800, b=0.5, attention=0.0, seed=1):
@@ -17,8 +27,9 @@ def _families(n=800, b=0.5, attention=0.0, seed=1):
     parent = rng.normal(5, 1, n)
     hot = 0.8 * (parent - 5) + rng.normal(0, 0.6, n)  # parent's current activity at copy time
     y = 3 + b * parent + attention * hot + rng.normal(0, 1, n)
-    return pd.DataFrame({"item_id": [f"t{i}" for i in range(n)], "ts": ts, "engagement": y,
-                         "parent_fitness": parent, "parent_hot": hot})
+    return pd.DataFrame(
+        {"item_id": [f"t{i}" for i in range(n)], "ts": ts, "engagement": y, "parent_fitness": parent, "parent_hot": hot}
+    )
 
 
 def test_recovers_parent_offspring_slope():
@@ -50,13 +61,15 @@ def test_attention_chasing_vs_inheritance():
 
 def test_relatives_and_parents():
     t = pd.Timestamp("2025-01-01", tz="UTC")
-    items = pd.DataFrame({
-        "item_id": ["a", "b", "c", "d"],
-        "ts": [t, t + pd.Timedelta(hours=2), t + pd.Timedelta(days=3), t + pd.Timedelta(days=4)],
-        "text": ["Chill Guy", "The Chill Guy coin", "Moo Deng", "chill guy"],
-        "ticker": ["CHILL", "CHILLG", "MOO", "CG"],
-        "phash": [np.uint64(0), np.uint64(1), np.uint64(2**63), np.nan],
-    })
+    items = pd.DataFrame(
+        {
+            "item_id": ["a", "b", "c", "d"],
+            "ts": [t, t + pd.Timedelta(hours=2), t + pd.Timedelta(days=3), t + pd.Timedelta(days=4)],
+            "text": ["Chill Guy", "The Chill Guy coin", "Moo Deng", "chill guy"],
+            "ticker": ["CHILL", "CHILLG", "MOO", "CG"],
+            "phash": [np.uint64(0), np.uint64(1), np.uint64(2**63), np.nan],
+        }
+    )
     rel = find_relatives(items, items)
     assert set(map(tuple, rel[rel.item_id == "d"][["rel_id"]].to_numpy().tolist())) == {("a",), ("b",)}
     assert rel[(rel.item_id == "b") & (rel.rel_id == "a")].via.item() == "both"
@@ -81,9 +94,17 @@ def test_attention_features_and_candles():
     v.loc["2024-12-20":] = 10_000.0
     pop, spike = attention_features(v, pd.Timestamp("2024-12-28", tz="UTC"))
     assert abs(pop - np.log10(101)) < 0.01 and spike > 1.5
-    c = [{"timestamp": int(pd.Timestamp(f"2024-01-0{i}", tz="UTC").timestamp() * 1000), "open": "1e-5",
-          "high": "1e-4", "low": "1e-6", "close": str(c), "volume": str(vol)}
-         for i, c, vol in [(1, 2e-5, 5e8), (2, 9e-5, 1e3), (3, 1e-5, 1e8)]]
+    c = [
+        {
+            "timestamp": int(pd.Timestamp(f"2024-01-0{i}", tz="UTC").timestamp() * 1000),
+            "open": "1e-5",
+            "high": "1e-4",
+            "low": "1e-6",
+            "close": str(c),
+            "volume": str(vol),
+        }
+        for i, c, vol in [(1, 2e-5, 5e8), (2, 9e-5, 1e3), (3, 1e-5, 1e8)]
+    ]
     cf = candles_frame(c)
     # Day 2 is a thin spike (tiny volume), so the robust peak to date uses day 1 only.
     assert peak_to_date(cf, pd.Timestamp("2024-01-03", tz="UTC")) == 2e-5 * 1e9
@@ -92,7 +113,15 @@ def test_attention_features_and_candles():
 
 
 def test_to_items_hashes_author():
-    d = pd.DataFrame({"mint": ["m1"], "created_at": ["2025-01-01T00:00:00Z"], "creator": ["W1"],
-                      "name": ["Pepe"], "symbol": ["PEPE"], "img_phash": ["ff00ff00ff00ff00"]})
+    d = pd.DataFrame(
+        {
+            "mint": ["m1"],
+            "created_at": ["2025-01-01T00:00:00Z"],
+            "creator": ["W1"],
+            "name": ["Pepe"],
+            "symbol": ["PEPE"],
+            "img_phash": ["ff00ff00ff00ff00"],
+        }
+    )
     it = to_items(d, salt="s", phash_col="img_phash")
     assert it.author.item() != "W1" and it.kind.item() == "token" and int(it.phash.item()) == 0xFF00FF00FF00FF00

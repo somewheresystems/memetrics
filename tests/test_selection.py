@@ -1,8 +1,15 @@
 import numpy as np
 import pandas as pd
 
-from memetrics.selection import (bh, fit_calibrated, fit_test, neutral_innovation, turnover_exponent,
-                                 turnover_profile, wf_sampled)
+from memetrics.selection import (
+    bh,
+    fit_calibrated,
+    fit_test,
+    neutral_innovation,
+    turnover_exponent,
+    turnover_profile,
+    wf_sampled,
+)
 
 
 def _traj(s, seed, Ne=10_000):

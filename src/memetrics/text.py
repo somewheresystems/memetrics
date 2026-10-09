@@ -70,17 +70,23 @@ def sim_matrix(a: list[str], b: list[str] | None = None, words: bool = False, wo
         qb = qa if b is None else [x.split() for x in b]
     else:
         qa, qb = a, (a if b is None else b)
-    return process.cdist(qa, qb, scorer=Levenshtein.normalized_similarity, dtype=np.float32,
-                         workers=WORKERS if workers is None else workers)
+    return process.cdist(
+        qa,
+        qb,
+        scorer=Levenshtein.normalized_similarity,
+        dtype=np.float32,
+        workers=WORKERS if workers is None else workers,
+    )
 
 
 # ---------------------------------------------------------------- near-duplicate units (MinHash LSH)
+
 
 def shingles(t: str, k: int = 5) -> set[int]:
     w = t.split()
     if len(w) < k:
         return {zlib.crc32(" ".join(w).encode())} if w else set()
-    return {zlib.crc32(" ".join(w[i:i + k]).encode()) for i in range(len(w) - k + 1)}
+    return {zlib.crc32(" ".join(w[i : i + k]).encode()) for i in range(len(w) - k + 1)}
 
 
 def jaccard(a: set, b: set) -> float:
@@ -109,8 +115,9 @@ class UnionFind:
         return np.array([self.find(i) for i in range(len(self.p))])
 
 
-def minhash_units(texts: list[str], tau: float = 0.5, k: int = 5, n_perm: int = 128,
-                  bands: int = 64, seed: int = 20261008) -> np.ndarray:
+def minhash_units(
+    texts: list[str], tau: float = 0.5, k: int = 5, n_perm: int = 128, bands: int = 64, seed: int = 20261008
+) -> np.ndarray:
     """Cluster label per text: connected components of verified Jaccard(5-shingles) >= tau."""
     rng = np.random.default_rng(seed)
     P = (1 << 61) - 1
@@ -125,20 +132,20 @@ def minhash_units(texts: list[str], tau: float = 0.5, k: int = 5, n_perm: int = 
             continue
         x = np.fromiter(s, dtype=np.uint64)
         # (a*x + b) mod 2^64 is a fine universal-ish hash for this purpose
-        h = (np.outer(x, a) + b)
+        h = np.outer(x, a) + b
         sig[i] = h.min(axis=0)
     for band in range(bands):
         buckets: dict[bytes, list[int]] = {}
-        block = sig[:, band * rows:(band + 1) * rows]
+        block = sig[:, band * rows : (band + 1) * rows]
         for i in range(len(texts)):
             if sh[i]:
                 buckets.setdefault(block[i].tobytes(), []).append(i)
         for members in buckets.values():
             if len(members) < 2:
                 continue
-            if len(members) <= 60:   # verify every pair in small buckets
-                pairs = ((x_, y_) for k_, x_ in enumerate(members) for y_ in members[k_ + 1:])
-            else:                    # large buckets: star from the first member plus consecutive pairs
+            if len(members) <= 60:  # verify every pair in small buckets
+                pairs = ((x_, y_) for k_, x_ in enumerate(members) for y_ in members[k_ + 1 :])
+            else:  # large buckets: star from the first member plus consecutive pairs
                 pairs = list(zip([members[0]] * (len(members) - 1), members[1:])) + list(zip(members, members[1:]))
             for x_, y_ in pairs:
                 if uf.find(x_) != uf.find(y_) and jaccard(sh[x_], sh[y_]) >= tau:
@@ -151,7 +158,7 @@ def threshold_components(texts: list[str], tau: float, words: bool = False) -> n
     uf = UnionFind(len(texts))
     step = 2000
     for i in range(0, len(texts), step):
-        S = sim_matrix(texts[i:i + step], texts, words=words)
+        S = sim_matrix(texts[i : i + step], texts, words=words)
         r, c = np.nonzero(S >= tau)
         for x, y in zip(r + i, c):
             if x < y:
@@ -161,8 +168,10 @@ def threshold_components(texts: list[str], tau: float, words: bool = False) -> n
 
 # ---------------------------------------------------------------- M1 statistics
 
-def medoid(items: list[str], weights: np.ndarray | None = None, words: bool = False, cap: int = 1500,
-           seed: int = 20261008) -> int:
+
+def medoid(
+    items: list[str], weights: np.ndarray | None = None, words: bool = False, cap: int = 1500, seed: int = 20261008
+) -> int:
     """Index of the item maximizing summed similarity to the others (sampled to `cap` columns)."""
     n = len(items)
     if n == 1:
@@ -178,41 +187,51 @@ def medoid(items: list[str], weights: np.ndarray | None = None, words: bool = Fa
 
 @dataclass
 class UnitResult:
-    unit_ids: np.ndarray        # analysed unit labels
-    D: np.ndarray               # Ashman's D per unit
+    unit_ids: np.ndarray  # analysed unit labels
+    D: np.ndarray  # Ashman's D per unit
     n_items: np.ndarray
-    item_unit: np.ndarray       # per item: unit label
-    w: np.ndarray               # per item: sim to own medoid
-    b: np.ndarray               # per item: sim to nearest other medoid
-    nearest: np.ndarray         # per item: nearest other unit
-    blend: np.ndarray           # per item: blend flag
+    item_unit: np.ndarray  # per item: unit label
+    w: np.ndarray  # per item: sim to own medoid
+    b: np.ndarray  # per item: sim to nearest other medoid
+    nearest: np.ndarray  # per item: nearest other unit
+    blend: np.ndarray  # per item: blend flag
     medoids: dict
 
     def summary(self) -> dict:
         D = self.D[np.isfinite(self.D)]
-        return {"n_units": int(len(self.unit_ids)), "n_items": int(len(self.w)),
-                "median_D": float(np.median(D)) if len(D) else np.nan,
-                "pooled_D": _ashman64(self.w, self.b),
-                "blend_share": float(self.blend.mean()) if len(self.blend) else np.nan}
+        return {
+            "n_units": int(len(self.unit_ids)),
+            "n_items": int(len(self.w)),
+            "median_D": float(np.median(D)) if len(D) else np.nan,
+            "pooled_D": _ashman64(self.w, self.b),
+            "blend_share": float(self.blend.mean()) if len(self.blend) else np.nan,
+        }
 
 
 def _candidate_medoids(items: list[str], med_texts: list[str], k: int) -> np.ndarray:
     """Top-k candidate medoids per item by char 3-gram TF-IDF cosine (exact sim is then computed)."""
     from sklearn.feature_extraction.text import TfidfVectorizer
+
     vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 3), min_df=1, dtype=np.float32)
     M = vec.fit_transform(med_texts)
     X = vec.transform(items)
     k = min(k, len(med_texts))
     out = np.empty((len(items), k), dtype=np.int64)
     for i in range(0, len(items), 4096):
-        S = (X[i:i + 4096] @ M.T).toarray()
-        out[i:i + 4096] = np.argpartition(-S, k - 1, axis=1)[:, :k]
+        S = (X[i : i + 4096] @ M.T).toarray()
+        out[i : i + 4096] = np.argpartition(-S, k - 1, axis=1)[:, :k]
     return out
 
 
-def unit_stats(items: list[str], labels: np.ndarray, weights: np.ndarray | None = None,
-               min_items: int = 5, words: bool = False, k_candidates: int = 30,
-               exact_limit: int = 3000) -> UnitResult:
+def unit_stats(
+    items: list[str],
+    labels: np.ndarray,
+    weights: np.ndarray | None = None,
+    min_items: int = 5,
+    words: bool = False,
+    k_candidates: int = 30,
+    exact_limit: int = 3000,
+) -> UnitResult:
     """Within/between similarity, Ashman's D per unit, and blend flags.
 
     items: distinct variants; labels: unit label per item. Units with < min_items items still serve as
@@ -225,8 +244,14 @@ def unit_stats(items: list[str], labels: np.ndarray, weights: np.ndarray | None 
     med_idx = np.array([g[medoid([items[j] for j in g], wts[g], words=words)] for g in groups])
     med_texts = [items[j] for j in med_idx]
     # similarity of every item to its own medoid
-    w = np.array([Levenshtein.normalized_similarity(*( (items[i].split(), med_texts[inv[i]].split()) if words
-                                                     else (items[i], med_texts[inv[i]]))) for i in range(len(items))])
+    w = np.array(
+        [
+            Levenshtein.normalized_similarity(
+                *((items[i].split(), med_texts[inv[i]].split()) if words else (items[i], med_texts[inv[i]]))
+            )
+            for i in range(len(items))
+        ]
+    )
     # nearest other medoid
     if len(uniq) <= exact_limit:
         S = sim_matrix(items, med_texts, words=words)
@@ -248,13 +273,22 @@ def unit_stats(items: list[str], labels: np.ndarray, weights: np.ndarray | None 
     analysed = [g for g in range(len(uniq)) if len(groups[g]) >= min_items]
     D = np.array([_ashman64(w[groups[g]], b[groups[g]]) for g in analysed])
     keep = np.isin(inv, analysed)
-    return UnitResult(unit_ids=uniq[analysed], D=D, n_items=np.array([len(groups[g]) for g in analysed]),
-                      item_unit=labels[keep], w=w[keep], b=b[keep], nearest=uniq[nearest][keep],
-                      blend=blend[keep], medoids={uniq[g]: med_texts[g] for g in range(len(uniq))})
+    return UnitResult(
+        unit_ids=uniq[analysed],
+        D=D,
+        n_items=np.array([len(groups[g]) for g in analysed]),
+        item_unit=labels[keep],
+        w=w[keep],
+        b=b[keep],
+        nearest=uniq[nearest][keep],
+        blend=blend[keep],
+        medoids={uniq[g]: med_texts[g] for g in range(len(uniq))},
+    )
 
 
-def gap_ratio(items: list[str], labels: np.ndarray, nearest_unit: dict, cap: int = 300, words: bool = False,
-              seed: int = 20261008) -> dict:
+def gap_ratio(
+    items: list[str], labels: np.ndarray, nearest_unit: dict, cap: int = 300, words: bool = False, seed: int = 20261008
+) -> dict:
     """Boundary-gap diagnostic (exploratory, not in the pre-registered rule).
 
     For unit u and its nearest unit v (by medoid): gap_u = (1 - max cross similarity between any item of u and any
@@ -265,8 +299,10 @@ def gap_ratio(items: list[str], labels: np.ndarray, nearest_unit: dict, cap: int
     rng = np.random.default_rng(seed)
     labels = np.asarray(labels)
     idx = {u: np.flatnonzero(labels == u) for u in np.unique(labels)}
+
     def samp(ix):
         return ix if len(ix) <= cap else rng.choice(ix, cap, replace=False)
+
     out = {}
     for u, v in nearest_unit.items():
         iu, iv = samp(idx[u]), samp(idx[v])
@@ -281,10 +317,12 @@ def gap_ratio(items: list[str], labels: np.ndarray, nearest_unit: dict, cap: int
     return out
 
 
-def silhouette(items: list[str], labels: np.ndarray, n: int = 20000, words: bool = False,
-               seed: int = 20261008) -> float:
+def silhouette(
+    items: list[str], labels: np.ndarray, n: int = 20000, words: bool = False, seed: int = 20261008
+) -> float:
     """Mean silhouette on distance 1 - sim for a seeded random sample of items."""
     from sklearn.metrics import silhouette_score
+
     labels = np.asarray(labels)
     rng = np.random.default_rng(seed)
     idx = np.arange(len(items)) if len(items) <= n else rng.choice(len(items), n, replace=False)
@@ -308,9 +346,20 @@ def bootstrap_median(x: np.ndarray, B: int = 1000, seed: int = 20261008) -> tupl
     return float(np.median(x)), float(np.quantile(bs, 0.025)), float(np.quantile(bs, 0.975))
 
 
-def m1_test(items: pd.DataFrame, min_items: int = 5, words: bool = False, weighted: bool = False,
-            n_boot: int = 2000, silhouette_n: int = 5000, gap: bool = True, d_threshold: float = 2.0,
-            blend_units: float = 0.10, blend_continuum: float = 0.25, seed: int = 20261008, name: str = "M1") -> Result:
+def m1_test(
+    items: pd.DataFrame,
+    min_items: int = 5,
+    words: bool = False,
+    weighted: bool = False,
+    n_boot: int = 2000,
+    silhouette_n: int = 5000,
+    gap: bool = True,
+    d_threshold: float = 2.0,
+    blend_units: float = 0.10,
+    blend_continuum: float = 0.25,
+    seed: int = 20261008,
+    name: str = "M1",
+) -> Result:
     """M1 on an items table (columns ``text``, ``unit``). Items are deduplicated to distinct (unit, text) variants;
     ``weighted=True`` weights the blend share by mention counts instead.
 
@@ -325,22 +374,32 @@ def m1_test(items: pd.DataFrame, min_items: int = 5, words: bool = False, weight
     keep = v[v.unit.isin(r.unit_ids)]
     wts = keep.n.to_numpy(float) if weighted else np.ones(len(keep))
     blend = float(np.average(r.blend, weights=wts)) if len(wts) else np.nan
-    sil = silhouette(list(keep.text), keep.unit.to_numpy(), n=silhouette_n, words=words, seed=seed) \
-        if silhouette_n else np.nan
+    sil = (
+        silhouette(list(keep.text), keep.unit.to_numpy(), n=silhouette_n, words=words, seed=seed)
+        if silhouette_n
+        else np.nan
+    )
     # nearest unit of each analysed unit = the most common nearest-other-unit among its items
     nn_unit = pd.Series(r.nearest).groupby(r.item_unit).agg(lambda x: x.value_counts().index[0]).to_dict()
     gaps = gap_ratio(list(v.text), v.unit.to_numpy(), nn_unit, words=words, seed=seed) if gap else {}
-    detail = {"blend_share": blend, "pooled_D": _ashman64(r.w, r.b), "silhouette": sil,
-              "median_gap_ratio": float(np.median(list(gaps.values()))) if gaps else np.nan,
-              "D_quantiles": {q: float(np.quantile(r.D[np.isfinite(r.D)], q)) for q in (0.1, 0.25, 0.5, 0.75, 0.9)}
-              if np.isfinite(r.D).any() else {},
-              "share_units_D_gt_2": float((r.D > 2).mean()) if len(r.D) else np.nan,
-              "D_hist": np.histogram(np.clip(r.D[np.isfinite(r.D)], 0, 10), bins=40, range=(0, 10))[0].tolist(),
-              "n_units": int(len(r.unit_ids)), "mean_within": float(r.w.mean()), "mean_between": float(r.b.mean()),
-              "thresholds": {"d_threshold": d_threshold, "blend_units": blend_units,
-                             "blend_continuum": blend_continuum}}
-    return Result(name, med, lo, hi, int(len(keep)), detail,
-                  m1_verdict(med, blend, d_threshold, blend_units, blend_continuum))
+    detail = {
+        "blend_share": blend,
+        "pooled_D": _ashman64(r.w, r.b),
+        "silhouette": sil,
+        "median_gap_ratio": float(np.median(list(gaps.values()))) if gaps else np.nan,
+        "D_quantiles": {q: float(np.quantile(r.D[np.isfinite(r.D)], q)) for q in (0.1, 0.25, 0.5, 0.75, 0.9)}
+        if np.isfinite(r.D).any()
+        else {},
+        "share_units_D_gt_2": float((r.D > 2).mean()) if len(r.D) else np.nan,
+        "D_hist": np.histogram(np.clip(r.D[np.isfinite(r.D)], 0, 10), bins=40, range=(0, 10))[0].tolist(),
+        "n_units": int(len(r.unit_ids)),
+        "mean_within": float(r.w.mean()),
+        "mean_between": float(r.b.mean()),
+        "thresholds": {"d_threshold": d_threshold, "blend_units": blend_units, "blend_continuum": blend_continuum},
+    }
+    return Result(
+        name, med, lo, hi, int(len(keep)), detail, m1_verdict(med, blend, d_threshold, blend_units, blend_continuum)
+    )
 
 
 def _ashman64(w, b) -> float:

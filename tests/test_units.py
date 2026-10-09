@@ -22,7 +22,9 @@ def test_identical_groups_tolerates_small_flips_and_splits_captions():
     g = identical_groups(ph, ts=np.arange(100))
     assert (g[50:] == np.arange(50)).all()
     # same hash, different captions -> different groups
-    g2 = identical_groups(np.array([5, 5], dtype=np.uint64), text=["one does not simply walk", "brace yourselves winter is coming"])
+    g2 = identical_groups(
+        np.array([5, 5], dtype=np.uint64), text=["one does not simply walk", "brace yourselves winter is coming"]
+    )
     assert g2[0] != g2[1]
 
 

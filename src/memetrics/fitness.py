@@ -21,6 +21,7 @@ weight = product.
 Default decision rule (:func:`m3_verdict`): content ICC >= 0.5 "content dominates"; < 0.2 "weak content fitness";
 otherwise "intermediate".
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -62,11 +63,12 @@ def _pair_sums(r, w, g):
     S2 = np.bincount(g, w * r * r)
     W2 = np.bincount(g, w * w)
     # sum_{i<j} w_i w_j (r_i-r_j)^2 = W*S2 - S1^2 ; ordered pairs i!=j weight sum = W^2 - W2
-    return float(np.sum(W * S2 - S1 ** 2) / 2.0), float(np.sum(W ** 2 - W2) / 2.0)
+    return float(np.sum(W * S2 - S1**2) / 2.0), float(np.sum(W**2 - W2) / 2.0)
 
 
-def crossed_components(r: np.ndarray, content: np.ndarray, author: np.ndarray,
-                       weights: np.ndarray | None = None) -> dict:
+def crossed_components(
+    r: np.ndarray, content: np.ndarray, author: np.ndarray, weights: np.ndarray | None = None
+) -> dict:
     """Moment estimates (s2_c, s2_a, s2_e) for residuals ``r`` with crossed factors ``content`` and ``author``."""
     r = np.asarray(r, float)
     c = pd.factorize(pd.Series(content))[0]
@@ -77,21 +79,38 @@ def crossed_components(r: np.ndarray, content: np.ndarray, author: np.ndarray,
     c_ss, c_n = _pair_sums(r, w, c)
     a_ss, a_n = _pair_sums(r, w, a)
     ca_ss, ca_n = _pair_sums(r, w, ca)
+
     def ratio(ss, n):
         return ss / n if n > 1e-9 else np.nan  # NaN when the design has no such pairs (not identified)
 
-    Wc = ratio(c_ss - ca_ss, c_n - ca_n)        # same content, different author
-    Wa = ratio(a_ss - ca_ss, a_n - ca_n)        # same author, different content
+    Wc = ratio(c_ss - ca_ss, c_n - ca_n)  # same content, different author
+    Wa = ratio(a_ss - ca_ss, a_n - ca_n)  # same author, different content
     T = ratio(all_ss - c_ss - a_ss + ca_ss, all_n - c_n - a_n + ca_n)
     s2c, s2a, s2e = T - Wc, T - Wa, Wc + Wa - T
     tot = s2c + s2a + s2e
-    return {"s2_content": s2c, "s2_author": s2a, "s2_resid": s2e, "icc_content": s2c / tot, "icc_author": s2a / tot,
-            "pairs_content": c_n - ca_n, "pairs_author": a_n - ca_n}
+    return {
+        "s2_content": s2c,
+        "s2_author": s2a,
+        "s2_resid": s2e,
+        "icc_content": s2c / tot,
+        "icc_author": s2a / tot,
+        "pairs_content": c_n - ca_n,
+        "pairs_author": a_n - ca_n,
+    }
 
 
-def content_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", author: str = "author",
-                fixed: list[str] | None = None, n_boot: int = 2000, seed: int = 0,
-                strong: float = 0.5, weak: float = 0.2, name: str = "M3 content ICC") -> Result:
+def content_icc(
+    df: pd.DataFrame,
+    y: str = "engagement",
+    content: str = "unit",
+    author: str = "author",
+    fixed: list[str] | None = None,
+    n_boot: int = 2000,
+    seed: int = 0,
+    strong: float = 0.5,
+    weak: float = 0.2,
+    name: str = "M3 content ICC",
+) -> Result:
     """Identical-content natural experiment (M3): content ICC vs author ICC.
 
     ``df`` is an items table (one row per posting). ``content`` identifies identical content (e.g. a pHash group);
@@ -117,9 +136,15 @@ def content_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", 
     verdict = m3_verdict(ic, strong, weak)
     lo, hi = q("icc_content")
     region = lambda v: 2 if v >= strong else 0 if v < weak else 1  # noqa: E731
-    detail = dict(est, icc_author_ci=q("icc_author"), diff=ic - est["icc_author"], diff_ci=q("diff"),
-                  ci_in_one_region=region(lo) == region(hi), n_contents=int(cc.max() + 1),
-                  n_authors=int(aa.max() + 1))
+    detail = dict(
+        est,
+        icc_author_ci=q("icc_author"),
+        diff=ic - est["icc_author"],
+        diff_ci=q("diff"),
+        ci_in_one_region=region(lo) == region(hi),
+        n_contents=int(cc.max() + 1),
+        n_authors=int(aa.max() + 1),
+    )
     return Result(name, float(ic), lo, hi, len(df), detail, verdict)
 
 
@@ -132,12 +157,19 @@ def oneway_icc(y: np.ndarray, group: np.ndarray) -> float:
     ni = g.size().to_numpy()
     msb = (ni * (g.mean().to_numpy() - d.y.mean()) ** 2).sum() / (k - 1)
     msw = ((d.y - g.transform("mean")) ** 2).sum() / (n - k)
-    n0 = (n - (ni ** 2).sum() / n) / (k - 1)
+    n0 = (n - (ni**2).sum() / n) / (k - 1)
     return float((msb - msw) / (msb + (n0 - 1) * msw))
 
 
-def simulate_crossed(n_content: int = 2000, n_author: int = 3000, n: int = 20000, s2c: float = 0.5,
-                     s2a: float = 0.3, s2e: float = 0.2, seed: int = 0) -> pd.DataFrame:
+def simulate_crossed(
+    n_content: int = 2000,
+    n_author: int = 3000,
+    n: int = 20000,
+    s2c: float = 0.5,
+    s2a: float = 0.3,
+    s2e: float = 0.2,
+    seed: int = 0,
+) -> pd.DataFrame:
     """Simulated postings with crossed content and author effects (for tests and power analysis). Content and
     author popularity are heavy-tailed (Zipf-like), as with reposts."""
     rng = np.random.default_rng(seed)
@@ -145,5 +177,9 @@ def simulate_crossed(n_content: int = 2000, n_author: int = 3000, n: int = 20000
     pa = 1 / np.arange(1, n_author + 1) ** 0.6
     c = rng.choice(n_content, n, p=pc / pc.sum())
     a = rng.choice(n_author, n, p=pa / pa.sum())
-    y = rng.normal(0, np.sqrt(s2c), n_content)[c] + rng.normal(0, np.sqrt(s2a), n_author)[a] + rng.normal(0, np.sqrt(s2e), n)
+    y = (
+        rng.normal(0, np.sqrt(s2c), n_content)[c]
+        + rng.normal(0, np.sqrt(s2a), n_author)[a]
+        + rng.normal(0, np.sqrt(s2e), n)
+    )
     return pd.DataFrame({"unit": c.astype(str), "author": a.astype(str), "engagement": y})

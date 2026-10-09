@@ -10,8 +10,14 @@ def _words(rng, L=15):
 
 def test_infer_parents_most_similar_earlier():
     ts = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"], utc=True)
-    items = pd.DataFrame({"item_id": list("abcd"), "ts": ts, "unit": "u",
-                          "text": ["the cat sat", "a dog ran far away", "the cat sat down", "the cat sat"]})
+    items = pd.DataFrame(
+        {
+            "item_id": list("abcd"),
+            "ts": ts,
+            "unit": "u",
+            "text": ["the cat sat", "a dog ran far away", "the cat sat down", "the cat sat"],
+        }
+    )
     p = chains.infer_parents(items)
     assert p.tolist() == [None, "a", "a", "a"]  # d is identical to a (and to nothing later)
 
@@ -21,7 +27,9 @@ def test_convergence_slope_recovers_beta():
     rows = []
     for u in range(200):
         x = rng.uniform(0, 0.5, 30)
-        rows.append(pd.DataFrame({"unit": u, "d_parent": x, "delta": -0.4 * x + rng.normal(0, 0.02, 30) + rng.normal()}))
+        rows.append(
+            pd.DataFrame({"unit": u, "d_parent": x, "delta": -0.4 * x + rng.normal(0, 0.02, 30) + rng.normal()})
+        )
     e = pd.concat(rows)
     b, lo, hi = chains.convergence_slope(e, n_boot=500)
     assert abs(b + 0.4) < 0.02 and lo < -0.4 < hi
@@ -34,7 +42,7 @@ def _chain_world(kind, n_units=30, n_steps=40, seed=0):
     for u in range(n_units):
         attractor = _words(rng)
         cur = list(attractor)
-        for j in range(len(cur)):          # start away from the attractor
+        for j in range(len(cur)):  # start away from the attractor
             if rng.random() < 0.6:
                 cur[j] = f"w{rng.integers(3000)}"
         prev = None
@@ -49,8 +57,15 @@ def _chain_world(kind, n_units=30, n_steps=40, seed=0):
             elif rng.random() < 0.05:
                 nxt[rng.integers(len(nxt))] = f"w{rng.integers(3000)}"
             iid = f"{u}-{s}"
-            items.append({"item_id": iid, "unit": str(u), "text": " ".join(nxt), "parent": prev,
-                          "ts": pd.Timestamp("2020-01-01", tz="UTC") + pd.Timedelta(hours=s)})
+            items.append(
+                {
+                    "item_id": iid,
+                    "unit": str(u),
+                    "text": " ".join(nxt),
+                    "parent": prev,
+                    "ts": pd.Timestamp("2020-01-01", tz="UTC") + pd.Timedelta(hours=s),
+                }
+            )
             prev, cur = iid, nxt
     return pd.DataFrame(items)
 

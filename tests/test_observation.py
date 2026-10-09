@@ -42,8 +42,14 @@ def test_thinning_lowers_observed_fidelity_on_ancestor_edges():
 
 
 def test_confusion_and_breakdown_shapes():
-    df = pd.DataFrame({"layer": "explicit", "p_private": [0, 0, 0.5, 0.5], "process": ["replicator", "attraction"] * 2,
-                       "inferred": ["replicator", "attraction", "attraction", "attraction"]})
+    df = pd.DataFrame(
+        {
+            "layer": "explicit",
+            "p_private": [0, 0, 0.5, 0.5],
+            "process": ["replicator", "attraction"] * 2,
+            "inferred": ["replicator", "attraction", "attraction", "attraction"],
+        }
+    )
     c = ob.confusion(df)
     assert np.allclose(c.sum(axis=1), 1)
     assert ob.breakdown_fraction(df) == 0.5

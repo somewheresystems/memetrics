@@ -4,8 +4,12 @@ from memetrics.fitness import content_icc, crossed_components, oneway_icc, simul
 
 
 def test_crossed_components_recover_truth():
-    est = np.array([[*crossed_components(d.engagement.values, d.unit.values, d.author.values).values()][:3]
-                    for d in (simulate_crossed(s2c=0.6, s2a=0.2, s2e=0.2, seed=s) for s in range(5))]).mean(0)
+    est = np.array(
+        [
+            [*crossed_components(d.engagement.values, d.unit.values, d.author.values).values()][:3]
+            for d in (simulate_crossed(s2c=0.6, s2a=0.2, s2e=0.2, seed=s) for s in range(5))
+        ]
+    ).mean(0)
     assert np.allclose(est, [0.6, 0.2, 0.2], atol=0.08)
 
 

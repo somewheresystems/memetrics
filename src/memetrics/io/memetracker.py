@@ -15,10 +15,11 @@ Raw quote file: blocks of lines `P url`, `T time`, `Q phrase` (0+), `L link` (0+
 items table: one item per (phrase, url); author = hashed site domain; community = 'blog' or
 'news'; unit = cluster id. `iter_documents` streams the raw files (for hyperlink edges).
 """
+
 from __future__ import annotations
 
 import gzip
-from typing import Iterator
+from collections.abc import Iterator
 from urllib.parse import urlsplit
 
 import pandas as pd
@@ -61,8 +62,9 @@ def read_clusters(path: str, min_cluster_mentions: int = 0) -> tuple[pd.DataFram
                         cl.append((cid, int(parts[0]), tot, parts[2]))
     clusters = pd.DataFrame(cl, columns=["cluster_id", "n_phrases", "total_freq", "root"])
     phrases = pd.DataFrame(ph, columns=["phrase_id", "cluster_id", "text", "freq", "n_urls"])
-    mentions = pd.DataFrame({"phrase_id": m_pid, "ts": pd.to_datetime(m_ts, utc=True), "freq": m_fq,
-                             "url_type": m_ty, "url": m_url})
+    mentions = pd.DataFrame(
+        {"phrase_id": m_pid, "ts": pd.to_datetime(m_ts, utc=True), "freq": m_fq, "url_type": m_ty, "url": m_url}
+    )
     return clusters, phrases, mentions
 
 
@@ -79,11 +81,23 @@ def mentions_to_items(phrases: pd.DataFrame, mentions: pd.DataFrame, salt: str |
     m = mentions.merge(phrases[["phrase_id", "cluster_id", "text"]], on="phrase_id")
     doms = m.url.map(domain)
     hashed = {d: hash_author(d, salt) for d in doms.unique()}
-    return conform(pd.DataFrame({
-        "item_id": m.phrase_id.astype(str) + "|" + m.url, "ts": m.ts, "author": doms.map(hashed),
-        "community": m.url_type.map({"B": "blog", "M": "news"}).fillna("other"), "kind": "text",
-        "text": m.text, "unit": m.cluster_id.astype(str), "parent": None, "engagement": m.freq.astype(float),
-        "url": m.url, "phrase_id": m.phrase_id}))
+    return conform(
+        pd.DataFrame(
+            {
+                "item_id": m.phrase_id.astype(str) + "|" + m.url,
+                "ts": m.ts,
+                "author": doms.map(hashed),
+                "community": m.url_type.map({"B": "blog", "M": "news"}).fillna("other"),
+                "kind": "text",
+                "text": m.text,
+                "unit": m.cluster_id.astype(str),
+                "parent": None,
+                "engagement": m.freq.astype(float),
+                "url": m.url,
+                "phrase_id": m.phrase_id,
+            }
+        )
+    )
 
 
 def iter_documents(path: str) -> Iterator[dict]:

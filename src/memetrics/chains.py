@@ -19,9 +19,10 @@ Estimators
 Default decision rule (thresholds are keyword arguments): replication if median f >= 0.9 and the 95% CI of beta
 contains 0; attraction if beta is significantly < 0 and median f < 0.9; otherwise "mixed".
 """
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -35,11 +36,13 @@ Sim = Callable[[str, str], float]
 
 # ---------------------------------------------------------------- edges
 
+
 def infer_parents(items: pd.DataFrame, sim: Sim = sim_edit, max_candidates: int = 2000) -> pd.Series:
     """E2 rule: each item's parent is the most similar *earlier* item of the same unit (ties -> most recent).
 
     This is a time-ordered guess, not an observed copy event: when many items copy one unobserved source, the
-    inferred tree is a chain or star that never happened. Returns a Series of parent item_ids (None for the first item of each unit), indexed like `items`.
+    inferred tree is a chain or star that never happened. Returns a Series of parent item_ids (None for the first
+    item of each unit), indexed like ``items``.
     Distinct texts are compared once; `max_candidates` caps the number of distinct earlier texts compared
     (the most recent ones are kept).
     """
@@ -49,8 +52,8 @@ def infer_parents(items: pd.DataFrame, sim: Sim = sim_edit, max_candidates: int 
     require(items, ["item_id", "ts", "text", "unit"], "infer_parents")
     out = pd.Series([None] * len(items), index=items.index, dtype=object)
     for _, g in items.dropna(subset=["unit"]).sort_values("ts", kind="stable").groupby("unit", sort=False):
-        latest: dict[str, str] = {}      # text -> most recent item_id with that text
-        order: list[str] = []            # distinct texts in order of last use
+        latest: dict[str, str] = {}  # text -> most recent item_id with that text
+        order: list[str] = []  # distinct texts in order of last use
         for idx, text, iid in zip(g.index, g["text"], g["item_id"]):
             if text in latest:
                 out[idx] = latest[text]
@@ -79,10 +82,16 @@ def edges_from_items(items: pd.DataFrame, parent_col: str = "parent") -> pd.Data
     p = it.loc[c[parent_col]]
     same = p["unit"].to_numpy() == c["unit"].to_numpy()
     c, p = c[same], p[same]
-    return pd.DataFrame({"unit": c["unit"].to_numpy(), "parent_id": c[parent_col].to_numpy(),
-                         "child_id": c["item_id"].to_numpy(), "parent_text": p["text"].to_numpy(),
-                         "child_text": c["text"].to_numpy(),
-                         "dt": (c["ts"].to_numpy() - p["ts"].to_numpy())})
+    return pd.DataFrame(
+        {
+            "unit": c["unit"].to_numpy(),
+            "parent_id": c[parent_col].to_numpy(),
+            "child_id": c["item_id"].to_numpy(),
+            "parent_text": p["text"].to_numpy(),
+            "child_text": c["text"].to_numpy(),
+            "dt": (c["ts"].to_numpy() - p["ts"].to_numpy()),
+        }
+    )
 
 
 def unit_medoids(items: pd.DataFrame, cap: int = 1500, seed: int = 20261008) -> dict:
@@ -97,6 +106,7 @@ def unit_medoids(items: pd.DataFrame, cap: int = 1500, seed: int = 20261008) -> 
 
 
 # ---------------------------------------------------------------- statistics
+
 
 def edge_stats(edges: pd.DataFrame, medoids: dict, sim: Sim = sim_edit) -> pd.DataFrame:
     """Adds f (fidelity), d_parent, d_child and delta to an edge table."""
@@ -165,8 +175,8 @@ def m2_verdict(f_med: float, beta_lo: float, beta_hi: float, f_threshold: float 
 
 # ---------------------------------------------------------------- calibrated replicator null
 
-def _mutate(words: list[str], k: int, vocab: list[str], rng: np.random.Generator,
-            p_indel: float = 2 / 3) -> list[str]:
+
+def _mutate(words: list[str], k: int, vocab: list[str], rng: np.random.Generator, p_indel: float = 2 / 3) -> list[str]:
     """k word edits; each is an insertion or deletion with prob. p_indel (equally likely), else a substitution."""
     w = list(words)
     for _ in range(k):
@@ -174,17 +184,24 @@ def _mutate(words: list[str], k: int, vocab: list[str], rng: np.random.Generator
             op = 0
         else:
             op = (1 if rng.random() < 0.5 else 2) if len(w) > 1 else 2
-        if op == 0:      # substitute
+        if op == 0:  # substitute
             w[rng.integers(len(w))] = vocab[rng.integers(len(vocab))]
-        elif op == 1:    # delete
+        elif op == 1:  # delete
             del w[rng.integers(len(w))]
-        else:            # insert
+        else:  # insert
             w.insert(int(rng.integers(len(w) + 1)), vocab[rng.integers(len(vocab))])
     return w
 
 
-def _resimulate(e: pd.DataFrame, roots: dict, p_mut: float, lam: float, vocab: list[str],
-                rng: np.random.Generator, p_indel: float = 2 / 3) -> pd.DataFrame:
+def _resimulate(
+    e: pd.DataFrame,
+    roots: dict,
+    p_mut: float,
+    lam: float,
+    vocab: list[str],
+    rng: np.random.Generator,
+    p_indel: float = 2 / 3,
+) -> pd.DataFrame:
     """New child texts along the observed topology: identical with prob 1 - p_mut, else 1 + Poisson(lam) word
     edits. Edges must be sorted so that parents precede children."""
     text = dict(roots)
@@ -205,8 +222,9 @@ def _resimulate(e: pd.DataFrame, roots: dict, p_mut: float, lam: float, vocab: l
     return out
 
 
-def replicator_null(edges: pd.DataFrame, n_sims: int = 200, sim: Sim = sim_edit, seed: int = 20261008,
-                    n_boot: int = 0) -> dict:
+def replicator_null(
+    edges: pd.DataFrame, n_sims: int = 200, sim: Sim = sim_edit, seed: int = 20261008, n_boot: int = 0
+) -> dict:
     """Null distribution of (beta, median f, toward share) under pure copying with matched mutation.
 
     Topology, edge counts and root texts are the observed ones. The share of non-identical edges matches the
@@ -239,6 +257,7 @@ def replicator_null(edges: pd.DataFrame, n_sims: int = 200, sim: Sim = sim_edit,
             d += 1
             depth[y] = d
         return depth.get(seen[0], d) if seen else d
+
     e["_depth"] = [dep(c) for c in e.child_id]
     e = e.sort_values("_depth", kind="stable").drop(columns="_depth")
 
@@ -247,6 +266,7 @@ def replicator_null(edges: pd.DataFrame, n_sims: int = 200, sim: Sim = sim_edit,
         ts = e.parent_text.sample(min(n, len(e)), random_state=int(r.integers(1 << 31)), replace=True)
         steps = [1 - sim(t, " ".join(_mutate(t.split(), 1 + r.poisson(lam), vocab, r, p_indel))) for t in ts]
         return float(np.mean(steps))
+
     lam = 0.0
     if step_obs > 0:
         lo, hi = 0.0, 50.0
@@ -258,23 +278,45 @@ def replicator_null(edges: pd.DataFrame, n_sims: int = 200, sim: Sim = sim_edit,
     betas, fmeds, tows = [], [], []
     for _ in range(n_sims):
         s = _resimulate(e, roots, p_mut, lam, vocab, rng, p_indel)
-        items = pd.concat([pd.DataFrame({"unit": s.unit, "text": s.parent_text}),
-                           pd.DataFrame({"unit": s.unit, "text": s.child_text})])
-        meds = {u: (lambda vc: list(vc.index)[medoid(list(vc.index), vc.to_numpy(), cap=400)])(g.text.value_counts())
-                for u, g in items.groupby("unit")}
+        items = pd.concat(
+            [
+                pd.DataFrame({"unit": s.unit, "text": s.parent_text}),
+                pd.DataFrame({"unit": s.unit, "text": s.child_text}),
+            ]
+        )
+        meds = {
+            u: (lambda vc: list(vc.index)[medoid(list(vc.index), vc.to_numpy(), cap=400)])(g.text.value_counts())
+            for u, g in items.groupby("unit")
+        }
         st = edge_stats(s, meds, sim)
         b, _, _ = convergence_slope(st, n_boot=1)
         betas.append(b)
         fmeds.append(float(np.median(st.f)))
         tows.append(toward_share(st))
-    return {"beta": np.array(betas), "f_median": np.array(fmeds), "toward": np.array(tows),
-            "p_mut": p_mut, "lam": lam, "step_obs": step_obs, "p_indel": p_indel}
+    return {
+        "beta": np.array(betas),
+        "f_median": np.array(fmeds),
+        "toward": np.array(tows),
+        "p_mut": p_mut,
+        "lam": lam,
+        "step_obs": step_obs,
+        "p_indel": p_indel,
+    }
 
 
 # ---------------------------------------------------------------- the M2 test
 
-def m2_test(edges: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, f_threshold: float = 0.9,
-            n_boot: int = 2000, null_sims: int = 0, seed: int = 20261008, name: str = "M2") -> Result:
+
+def m2_test(
+    edges: pd.DataFrame,
+    medoids: dict,
+    sim: Sim = sim_edit,
+    f_threshold: float = 0.9,
+    n_boot: int = 2000,
+    null_sims: int = 0,
+    seed: int = 20261008,
+    name: str = "M2",
+) -> Result:
     """Fidelity vs attraction on an edge table.
 
     estimate = median per-step fidelity f; detail holds beta (convergence slope) with CI, the share of identical
@@ -290,18 +332,32 @@ def m2_test(edges: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, f_threshold
         fd, fd_lo, fd_hi = median_fidelity(der, n_boot, seed)
     else:
         fd = fd_lo = fd_hi = np.nan
-    detail = {"beta": beta, "beta_ci": [b_lo, b_hi], "mean_f": float(st.f.mean()),
-              "f_median_derivatives": fd, "f_median_derivatives_ci": [fd_lo, fd_hi], "n_derivatives": int(len(der)),
-              "verdict_m2a": ("high fidelity" if fd >= f_threshold else "low fidelity") if np.isfinite(fd) else None,
-              "share_identical": float((st.f >= 1).mean()), "toward_share": toward_share(st),
-              "n_units": int(st.unit.nunique()), "f_threshold": f_threshold}
+    detail = {
+        "beta": beta,
+        "beta_ci": [b_lo, b_hi],
+        "mean_f": float(st.f.mean()),
+        "f_median_derivatives": fd,
+        "f_median_derivatives_ci": [fd_lo, fd_hi],
+        "n_derivatives": int(len(der)),
+        "verdict_m2a": ("high fidelity" if fd >= f_threshold else "low fidelity") if np.isfinite(fd) else None,
+        "share_identical": float((st.f >= 1).mean()),
+        "toward_share": toward_share(st),
+        "n_units": int(st.unit.nunique()),
+        "f_threshold": f_threshold,
+    }
     if null_sims:
         nl = replicator_null(edges, null_sims, sim, seed)
         q_lo, q_hi = np.nanquantile(nl["beta"], [0.025, 0.975])
-        detail.update({"null_beta_q025": float(q_lo), "null_beta_q975": float(q_hi),
-                       "null_beta_median": float(np.nanmedian(nl["beta"])),
-                       "null_toward_median": float(np.nanmedian(nl["toward"])),
-                       "null_p_mut": nl["p_mut"], "null_lam": nl["lam"]})
+        detail.update(
+            {
+                "null_beta_q025": float(q_lo),
+                "null_beta_q975": float(q_hi),
+                "null_beta_median": float(np.nanmedian(nl["beta"])),
+                "null_toward_median": float(np.nanmedian(nl["toward"])),
+                "null_p_mut": nl["p_mut"],
+                "null_lam": nl["lam"],
+            }
+        )
         if beta < q_lo and f_med < f_threshold:
             cal = "attraction"
         elif f_med >= f_threshold and q_lo <= beta <= q_hi:
@@ -313,6 +369,7 @@ def m2_test(edges: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, f_threshold
 
 
 # ---------------------------------------------------------------- lineage depth and Price decomposition
+
 
 def depths(items: pd.DataFrame, parent_col: str = "parent") -> pd.DataFrame:
     """Root id and depth of every item along parent links (roots: no parent in the table)."""
@@ -349,13 +406,20 @@ def depth_profile(items: pd.DataFrame, sim: Sim = sim_edit, max_depth: int = 10,
     def slope(lo, hi):
         x = d[(d.depth >= lo) & (d.depth <= hi)]
         return float(np.polyfit(x.depth, x.dist, 1)[0]) if x.depth.nunique() >= 2 else np.nan
+
     se, sl = slope(0, 2), slope(3, max_depth)
-    return {"profile": prof["mean"].to_dict(), "counts": prof["count"].to_dict(), "slope_early": se,
-            "slope_late": sl, "saturation_ratio": sl / se if se and np.isfinite(se) and se > 0 else np.nan}
+    return {
+        "profile": prof["mean"].to_dict(),
+        "counts": prof["count"].to_dict(),
+        "slope_early": se,
+        "slope_late": sl,
+        "saturation_ratio": sl / se if se and np.isfinite(se) and se > 0 else np.nan,
+    }
 
 
-def price_decomposition(items: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, parent_col: str = "parent",
-                        min_items: int = 10) -> pd.DataFrame:
+def price_decomposition(
+    items: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, parent_col: str = "parent", min_items: int = 10
+) -> pd.DataFrame:
     """Price equation for the trait z = 1 - sim(x, unit medoid), per unit (Price 1970; applied to cultural
     attraction vs selection by Claidiere, Scott-Phillips & Sperber 2014).
 

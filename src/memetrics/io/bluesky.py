@@ -24,6 +24,7 @@ it securely and publish only aggregates.
 likes + reposts + quotes received within a horizon (default 48 h), and `parent` = the quoted post (or replied-to
 post if `parent_from='reply'`).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,9 +33,9 @@ import json
 import os
 import signal
 import time
-from datetime import datetime, timezone
-from pathlib import Path
 from collections.abc import Iterator
+from datetime import UTC, datetime
+from pathlib import Path
 
 from ..schema import conform
 from . import USER_AGENT, hash_author
@@ -63,19 +64,25 @@ def compact(ev: dict) -> dict | None:
         rec = c.get("record")
         if rec is not None:
             rec = {k: v for k, v in rec.items() if k != "$type"}
-        return {"t": t, "k": "commit", "did": did, "c": c.get("collection"),
-                "op": c.get("operation"), "rk": c.get("rkey"), "r": rec}
+        return {
+            "t": t,
+            "k": "commit",
+            "did": did,
+            "c": c.get("collection"),
+            "op": c.get("operation"),
+            "rk": c.get("rkey"),
+            "r": rec,
+        }
     if kind == "account":
         a = ev.get("account") or {}
-        return {"t": t, "k": "account", "did": did, "active": a.get("active"),
-                "status": a.get("status")}
+        return {"t": t, "k": "account", "did": did, "active": a.get("active"), "status": a.get("status")}
     if kind == "identity":
         return {"t": t, "k": "identity", "did": did}
     return None
 
 
 def hour_path(root: Path, t_us: int) -> Path:
-    dt = datetime.fromtimestamp(t_us / 1e6, tz=timezone.utc)
+    dt = datetime.fromtimestamp(t_us / 1e6, tz=UTC)
     return root / dt.strftime("%Y-%m-%d") / f"{dt:%H}.jsonl.gz"
 
 
@@ -128,6 +135,7 @@ async def collect(root: Path, hosts: tuple[str, ...], zstd_dict: str | None = No
     dec = None
     if zstd_dict:
         import zstandard
+
         dec = zstandard.ZstdDecompressor(dict_data=zstandard.ZstdCompressionDict(open(zstd_dict, "rb").read()))
 
     root.mkdir(parents=True, exist_ok=True)
@@ -141,7 +149,7 @@ async def collect(root: Path, hosts: tuple[str, ...], zstd_dict: str | None = No
 
     def note(msg: str) -> None:
         with open(log, "a") as fh:
-            fh.write(f"{datetime.now(timezone.utc).isoformat()} {msg}\n")
+            fh.write(f"{datetime.now(UTC).isoformat()} {msg}\n")
 
     while not stop.is_set():
         qs = "&".join(f"wantedCollections={c}" for c in COLLECTIONS) + ("&compress=true" if dec else "")
@@ -150,13 +158,14 @@ async def collect(root: Path, hosts: tuple[str, ...], zstd_dict: str | None = No
             url += f"&cursor={last_t - 5_000_000}"
         try:
             note(f"connect {url[:80]} cursor={last_t}")
-            async with websockets.connect(url, max_size=2**22, ping_interval=None,
-                                          open_timeout=30, max_queue=4096) as ws:
+            async with websockets.connect(
+                url, max_size=2**22, ping_interval=None, open_timeout=30, max_queue=4096
+            ) as ws:
                 while not stop.is_set():
                     try:
                         msg = await asyncio.wait_for(ws.recv(), timeout=120)
-                    except asyncio.TimeoutError:
-                        raise ConnectionError("no message in 120 s")
+                    except TimeoutError:
+                        raise ConnectionError("no message in 120 s") from None
                     if dec is not None and isinstance(msg, (bytes, bytearray)):
                         msg = dec.decompress(msg, max_output_size=2**24)
                     ev = json.loads(msg)
@@ -186,6 +195,7 @@ async def collect(root: Path, hosts: tuple[str, ...], zstd_dict: str | None = No
 
 
 # ---------------------------------------------------------------- reader
+
 
 def iter_files(root: Path, start: str | None = None, end: str | None = None) -> Iterator[Path]:
     """Hourly files in time order; start/end are 'YYYY-MM-DD' (inclusive)."""
@@ -269,12 +279,39 @@ def to_items(events, horizon_h: float = 48.0, parent_from: str = "quote", salt: 
     rows = []
     for uri, (t, did, text, q, reply, langs) in posts.items():
         n = sum(1 for x in eng.get(uri, ()) if t <= x <= t + horizon)
-        rows.append({"item_id": uri, "ts": pd.Timestamp(t, unit="us", tz="UTC"), "author": hash_author(did, salt),
-                     "community": langs or "und", "kind": "text", "text": text,
-                     "parent": q if parent_from == "quote" else reply, "quote_of": q, "reply_to": reply,
-                     "engagement": float(n), "deleted": uri in deleted})
-    return conform(pd.DataFrame(rows, columns=["item_id", "ts", "author", "community", "kind", "text", "parent",
-                                               "quote_of", "reply_to", "engagement", "deleted"]))
+        rows.append(
+            {
+                "item_id": uri,
+                "ts": pd.Timestamp(t, unit="us", tz="UTC"),
+                "author": hash_author(did, salt),
+                "community": langs or "und",
+                "kind": "text",
+                "text": text,
+                "parent": q if parent_from == "quote" else reply,
+                "quote_of": q,
+                "reply_to": reply,
+                "engagement": float(n),
+                "deleted": uri in deleted,
+            }
+        )
+    return conform(
+        pd.DataFrame(
+            rows,
+            columns=[
+                "item_id",
+                "ts",
+                "author",
+                "community",
+                "kind",
+                "text",
+                "parent",
+                "quote_of",
+                "reply_to",
+                "engagement",
+                "deleted",
+            ],
+        )
+    )
 
 
 # ---------------------------------------------------------------- public AppView (read-only, no login)
@@ -313,7 +350,7 @@ def get_posts(uris: list[str]) -> dict:  # pragma: no cover - network
     """uri -> post view (dict) for posts that still exist; missing uris are deleted or hidden. Batches of 25."""
     out = {}
     for i in range(0, len(uris), 25):
-        r = _get("app.bsky.feed.getPosts", [("uris", u) for u in uris[i:i + 25]])
+        r = _get("app.bsky.feed.getPosts", [("uris", u) for u in uris[i : i + 25]])
         for p in (r or {}).get("posts", []):
             out[p["uri"]] = p
         time.sleep(0.1)
@@ -324,7 +361,7 @@ def get_profiles(dids: list[str]) -> dict:  # pragma: no cover - network
     """did -> {followersCount, followsCount, postsCount}. Batches of 25."""
     out = {}
     for i in range(0, len(dids), 25):
-        r = _get("app.bsky.actor.getProfiles", [("actors", d) for d in dids[i:i + 25]])
+        r = _get("app.bsky.actor.getProfiles", [("actors", d) for d in dids[i : i + 25]])
         for p in (r or {}).get("profiles", []):
             out[p["did"]] = {k: p.get(k) for k in ("followersCount", "followsCount", "postsCount")}
         time.sleep(0.1)

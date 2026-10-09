@@ -85,8 +85,11 @@ def conform(df: pd.DataFrame) -> pd.DataFrame:
     if "engagement" in d:
         d["engagement"] = pd.to_numeric(d["engagement"], errors="coerce").astype(float)
     if "phash" in d:
-        d["phash"] = pd.Series([None if _null(h) else np.uint64(int(h, 16) if isinstance(h, str) else int(h))
-                                for h in d["phash"]], index=d.index, dtype=object)
+        d["phash"] = pd.Series(
+            [None if _null(h) else np.uint64(int(h, 16) if isinstance(h, str) else int(h)) for h in d["phash"]],
+            index=d.index,
+            dtype=object,
+        )
     cols = [c for c in COLUMNS if c in d] + [c for c in d.columns if c not in COLUMNS]
     return d[cols].reset_index(drop=True)
 

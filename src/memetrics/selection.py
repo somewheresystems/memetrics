@@ -15,12 +15,13 @@
   z = a y^x. The neutral reference x comes from simulation of the neutral model with innovation, matched on N, mu and
   sample size, instead of a fixed published constant.
 """
+
 from __future__ import annotations
+
+import warnings
 
 import numpy as np
 import pandas as pd
-import warnings
-
 from scipy import stats
 
 from .result import Result
@@ -45,7 +46,8 @@ def fit_test(x: np.ndarray, t: np.ndarray) -> tuple[float, float, int]:
 
 
 def bh(p: np.ndarray, q: float = 0.05) -> np.ndarray:
-    """Benjamini & Hochberg (1995, JRSS B 57:289-300, doi:10.1111/j.2517-6161.1995.tb02031.x) rejections at FDR q (NaNs never rejected)."""
+    """Benjamini & Hochberg (1995, JRSS B 57:289-300, doi:10.1111/j.2517-6161.1995.tb02031.x) rejections at FDR
+    q (NaNs never rejected)."""
     p = np.asarray(p, float)
     ok = np.flatnonzero(~np.isnan(p))
     rej = np.zeros(len(p), bool)
@@ -72,8 +74,9 @@ def equal_count_bins(ts: np.ndarray, is_unit: np.ndarray, k: int) -> pd.DataFram
 # ---------------------------------------------------------------- Wright-Fisher
 
 
-def wf_sampled(x0: float, gens: np.ndarray, n_sample: np.ndarray, Ne: float, s: float = 0.0,
-               reps: int = 200, seed: int = 0) -> np.ndarray:
+def wf_sampled(
+    x0: float, gens: np.ndarray, n_sample: np.ndarray, Ne: float, s: float = 0.0, reps: int = 200, seed: int = 0
+) -> np.ndarray:
     """Wright-Fisher trajectories (haploid, selection coefficient s per generation) started at x0, sampled
     binomially with ``n_sample[i]`` at generation ``gens[i]`` (sorted, gens[0] = 0). Returns (reps, len(gens))
     sample frequencies."""
@@ -92,9 +95,17 @@ def wf_sampled(x0: float, gens: np.ndarray, n_sample: np.ndarray, Ne: float, s: 
     return out
 
 
-def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), gen_unit: float = 1.0,
-                   reps: int = 200, n_sets: int = 1000, fdr: float = 0.05, s_grid=(0.01, 0.05, 0.1),
-                   seed: int = 0, name: str = "M4 FIT") -> Result:
+def fit_calibrated(
+    trajs: list[pd.DataFrame],
+    Ne_grid=(1_000, 10_000, 100_000),
+    gen_unit: float = 1.0,
+    reps: int = 200,
+    n_sets: int = 1000,
+    fdr: float = 0.05,
+    s_grid=(0.01, 0.05, 0.1),
+    seed: int = 0,
+    name: str = "M4 FIT",
+) -> Result:
     """FIT on observed trajectories with a matched Wright-Fisher null.
 
     ``trajs``: list of per-bin tables with columns t (time), n (pool sample size), count (unit count). Time is
@@ -113,9 +124,11 @@ def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), 
     rng = np.random.default_rng(seed)
     collide = sum(np.any(np.diff(np.round((d.t.to_numpy() - d.t.iloc[0]) / gen_unit)) == 0) for d in trajs)
     if collide:
-        warnings.warn(f"{collide} of {len(trajs)} trajectories have bins closer than one generation (gen_unit="
-                      f"{gen_unit}); their null FIT p-values are NaN, which deflates the null rejection share",
-                      stacklevel=2)
+        warnings.warn(
+            f"{collide} of {len(trajs)} trajectories have bins closer than one generation (gen_unit="
+            f"{gen_unit}); their null FIT p-values are NaN, which deflates the null rejection share",
+            stacklevel=2,
+        )
     obs_p = []
     for d in trajs:
         obs_p.append(fit_test(d["count"] / d["n"], d.t / gen_unit)[1])
@@ -136,8 +149,12 @@ def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), 
             P[i] = [fit_test(sim[r], g)[1] for r in range(reps)]
         Pv = P[valid]
         shares = np.array([bh(Pv[np.arange(len(Pv)), rng.integers(0, reps, len(Pv))], q).mean() for _ in range(n_sets)])
-        null[Ne] = {"fpr_raw": float(np.nanmean(Pv < 0.05)), "bh_share_q025": float(np.quantile(shares, 0.025)),
-                    "bh_share_q975": float(np.quantile(shares, 0.975)), "bh_share_mean": float(shares.mean())}
+        null[Ne] = {
+            "fpr_raw": float(np.nanmean(Pv < 0.05)),
+            "bh_share_q025": float(np.quantile(shares, 0.025)),
+            "bh_share_q975": float(np.quantile(shares, 0.975)),
+            "bh_share_mean": float(shares.mean()),
+        }
         for s in s_grid:
             pw = []
             for i, d in enumerate(trajs):
@@ -151,16 +168,28 @@ def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), 
     above = all(obs_share > null[N]["bh_share_q975"] for N in Ne_grid)
     inside = any(null[N]["bh_share_q025"] <= obs_share <= null[N]["bh_share_q975"] for N in Ne_grid)
     verdict = "selection beyond drift" if above else "drift-compatible" if inside else "ambiguous"
-    return Result(name, obs_share, np.nan, np.nan, int(valid.sum()),
-                  {"raw_share_p05": raw_share, "null": null, "power_p05": {f"Ne={k[0]},s={k[1]}": v for k, v in power.items()},
-                   "p_values": obs_p.tolist()}, verdict)
+    return Result(
+        name,
+        obs_share,
+        np.nan,
+        np.nan,
+        int(valid.sum()),
+        {
+            "raw_share_p05": raw_share,
+            "null": null,
+            "power_p05": {f"Ne={k[0]},s={k[1]}": v for k, v in power.items()},
+            "p_values": obs_p.tolist(),
+        },
+        verdict,
+    )
 
 
 # ---------------------------------------------------------------- neutral model with innovation, turnover
 
 
-def neutral_innovation(N: int, mu: float, steps: int, burn: int = 200, conformity: float = 0.0,
-                       fitness_sd: float = 0.0, seed: int = 0) -> list[np.ndarray]:
+def neutral_innovation(
+    N: int, mu: float, steps: int, burn: int = 200, conformity: float = 0.0, fitness_sd: float = 0.0, seed: int = 0
+) -> list[np.ndarray]:
     """Random-copying model with innovation (Bentley et al. 2004/2007): each step, N new items copy a variant of a
     random item from the previous step (probability 1 - mu) or invent a new variant (mu). ``conformity`` > 0 biases
     copying toward common variants (weights ~ count^(1+conformity)); ``fitness_sd`` > 0 gives each variant a
@@ -214,9 +243,17 @@ def turnover_exponent(prof: pd.DataFrame) -> float:
     return float(np.polyfit(np.log(d.y), np.log(d.z), 1)[0])
 
 
-def turnover_test(steps: list[np.ndarray], mu: float, N: int = 10_000, sample_sizes: list[int] | None = None,
-                  ys=tuple(range(5, 55, 5)), runs: int = 200, gens_per_step: int = 1, seed: int = 0,
-                  name: str = "M4 turnover") -> Result:
+def turnover_test(
+    steps: list[np.ndarray],
+    mu: float,
+    N: int = 10_000,
+    sample_sizes: list[int] | None = None,
+    ys=tuple(range(5, 55, 5)),
+    runs: int = 200,
+    gens_per_step: int = 1,
+    seed: int = 0,
+    name: str = "M4 turnover",
+) -> Result:
     """Compare the observed turnover exponent with neutral simulations matched on mu and (optionally) per-step sample
     sizes (the neutral population of size N is subsampled to the observed sizes before ranking).
 
@@ -233,8 +270,14 @@ def turnover_test(steps: list[np.ndarray], mu: float, N: int = 10_000, sample_si
         sims.append(turnover_exponent(turnover_profile(sim, ys, seed=seed + r)))
     sims = np.array(sims)
     lo, hi = np.nanquantile(sims, [0.025, 0.975])
-    v = "neutral-compatible" if lo <= x_obs <= hi else ("conformity/popularity bias" if x_obs < lo else "novelty/anti-conformity bias")
-    return Result(name, float(x_obs), float(lo), float(hi), T, {"null_mean": float(np.nanmean(sims)), "mu": mu, "N": N}, v)
+    v = (
+        "neutral-compatible"
+        if lo <= x_obs <= hi
+        else ("conformity/popularity bias" if x_obs < lo else "novelty/anti-conformity bias")
+    )
+    return Result(
+        name, float(x_obs), float(lo), float(hi), T, {"null_mean": float(np.nanmean(sims)), "mu": mu, "N": N}, v
+    )
 
 
 def new_variant_share(steps: list[np.ndarray]) -> float:
@@ -253,12 +296,14 @@ def subsample_steps(steps: list[np.ndarray], sizes, gens_per_step: int = 1, rng=
     rng = rng or np.random.default_rng(0)
     out = []
     for i, n in enumerate(sizes):
-        pool = np.concatenate(steps[i * gens_per_step:(i + 1) * gens_per_step])
+        pool = np.concatenate(steps[i * gens_per_step : (i + 1) * gens_per_step])
         out.append(rng.choice(pool, min(int(n), len(pool)), replace=False))
     return out
 
 
-def calibrate_mu(target_share: float, sizes, N: int = 10_000, gens_per_step: int = 1, grid=None, seed: int = 0) -> float:
+def calibrate_mu(
+    target_share: float, sizes, N: int = 10_000, gens_per_step: int = 1, grid=None, seed: int = 0
+) -> float:
     """Innovation rate mu whose subsampled new-variant share best matches ``target_share`` (grid search, log scale)."""
     grid = grid if grid is not None else np.geomspace(1e-4, 0.5, 18)
     rng = np.random.default_rng(seed)

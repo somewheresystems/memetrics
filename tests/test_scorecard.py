@@ -2,15 +2,14 @@ import pandas as pd
 import pytest
 
 from memetrics import observation as ob
-from memetrics import report, scorecard, schema
+from memetrics import report, schema, scorecard
 
 
 @pytest.fixture(scope="module")
 def items():
     log = ob.simulate("attraction", 0.2, seed=3, params=ob.WorldParams(n_agents=400))
     obs = ob.observe(log, "explicit", seed=3)
-    return schema.conform(obs[["item_id", "ts", "author", "community", "kind", "text", "unit", "parent",
-                               "engagement"]])
+    return schema.conform(obs[["item_id", "ts", "author", "community", "kind", "text", "unit", "parent", "engagement"]])
 
 
 def test_scorecard_runs_every_measure_and_always_has_blind_spots(items, tmp_path):
@@ -36,8 +35,7 @@ def test_scorecard_skips_cleanly_without_engagement_or_units(items):
 
 
 def test_rules_change_literal_verdict(items):
-    strict = scorecard.run(items, effort=scorecard.Effort.fast(), which=("M1",),
-                           rules=scorecard.Rules(d_threshold=1e9))
+    strict = scorecard.run(items, effort=scorecard.Effort.fast(), which=("M1",), rules=scorecard.Rules(d_threshold=1e9))
     assert strict["measures"][0]["rows"][0]["literal"] == "continuum"
 
 
