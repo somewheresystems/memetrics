@@ -13,25 +13,31 @@ downstream by (did, collection, rkey, op)).
 
 Reader: `iter_events(root, start, end)` streams events; `parse_uri` splits at:// URIs.
 
-Run:  uv run --python 3.13 --with websockets python -m memetrics.io.bluesky collect --root DIR
+Run the collector with ``memetrics ingest bluesky --collect --root DIR`` (needs ``memetrics[bluesky]``). Jetstream
+is a public, unauthenticated firehose relay; the collector holds one connection, reconnects with a 5 s pause and
+rotates through the public instances. The AppView helpers (``get_posts`` and friends) call the public read-only
+API in batches of 25 with a pause between requests and back off on HTTP 429 until ``ratelimit-reset``. Follow
+Bluesky's terms of service and developer guidelines; collected data contains public posts of real people, so store
+it securely and publish only aggregates.
 
-`to_items(events)` turns the event stream into the common items table (toolkit/DESIGN.md), with
-`engagement` = likes + reposts + quotes received within a horizon (default 48 h), and `parent` = the quoted
-post (or replied-to post if `parent_from='reply'`).
+`to_items(events)` turns the event stream into the items table (:mod:`memetrics.schema`), with `engagement` =
+likes + reposts + quotes received within a horizon (default 48 h), and `parent` = the quoted post (or replied-to
+post if `parent_from='reply'`).
 """
 from __future__ import annotations
 
-import argparse
 import asyncio
 import gzip
 import json
 import os
 import signal
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from collections.abc import Iterator
+
+from ..schema import conform
+from . import USER_AGENT, hash_author
 
 COLLECTIONS = (
     "app.bsky.feed.post",
@@ -237,8 +243,6 @@ def to_items(events, horizon_h: float = 48.0, parent_from: str = "quote", salt: 
     """
     import pandas as pd
 
-    from . import hash_author
-
     posts, eng, deleted = {}, {}, set()
     horizon = horizon_h * 3600e6
     for e in events:
@@ -269,7 +273,8 @@ def to_items(events, horizon_h: float = 48.0, parent_from: str = "quote", salt: 
                      "community": langs or "und", "kind": "text", "text": text,
                      "parent": q if parent_from == "quote" else reply, "quote_of": q, "reply_to": reply,
                      "engagement": float(n), "deleted": uri in deleted})
-    return pd.DataFrame(rows)
+    return conform(pd.DataFrame(rows, columns=["item_id", "ts", "author", "community", "kind", "text", "parent",
+                                               "quote_of", "reply_to", "engagement", "deleted"]))
 
 
 # ---------------------------------------------------------------- public AppView (read-only, no login)
@@ -286,7 +291,7 @@ def _get(method: str, params: list[tuple[str, str]], retries: int = 6) -> dict |
     delay = 2.0
     for _ in range(retries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "memetrics-research/0.1 (read-only)"})
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=60) as r:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
@@ -333,18 +338,3 @@ def get_relationship(actor: str, other: str) -> dict | None:  # pragma: no cover
     if not rel or rel.get("notFound"):
         return None
     return {"actor_follows": "following" in rel, "followed_by": "followedBy" in rel}
-
-
-def main(argv: list[str] | None = None) -> None:  # pragma: no cover
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("collect")
-    c.add_argument("--root", required=True)
-    c.add_argument("--zstd-dict", default=None)
-    a = ap.parse_args(argv)
-    if a.cmd == "collect":
-        asyncio.run(collect(Path(a.root), (DEFAULT_HOST,) + FALLBACK_HOSTS, a.zstd_dict))
-
-
-if __name__ == "__main__":  # pragma: no cover
-    sys.exit(main())

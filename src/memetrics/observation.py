@@ -37,12 +37,13 @@ Quick use
 >>> res = ob.evaluate(obs)            # dict of Result for M1..M5, N1
 >>> ob.composite(res)                 # inferred process label
 >>> ob.distinguishability(p_private=0.5, reps=10)   # confusion matrix: can this design tell processes apart?
+>>> ob.params_for_size(20_000)        # a world whose observed table has about 20k items
 
 All randomness flows from ``seed``. Pure numpy/pandas; no network access.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -55,7 +56,7 @@ PROCESSES = ("replicator", "attraction", "neutral", "contagion")
 
 @dataclass(frozen=True)
 class WorldParams:
-    """Defaults are the pre-registered ones (notes/PREREG-text.md section 10)."""
+    """World settings. The defaults are those of the simulation study in the accompanying paper."""
     n_agents: int = 3000
     mean_out_degree: int = 20
     indegree_exponent: float = 2.5
@@ -82,6 +83,15 @@ class WorldParams:
     attraction_alpha: float = 0.15
     fitness_sigma_unit: float = 0.8
     fitness_sigma_mut: float = 0.2
+
+
+ITEMS_PER_AGENT = 6.4  # observed items per agent at the default settings (p_private 0.3, 60 steps)
+
+
+def params_for_size(n_items: int, **overrides) -> WorldParams:
+    """World parameters whose observed items table has roughly ``n_items`` rows (agents scaled, 200-20,000)."""
+    n_agents = int(np.clip(round(n_items / ITEMS_PER_AGENT), 200, 20_000))
+    return replace(WorldParams(), n_agents=n_agents, **overrides)
 
 
 # =============================================================== ground truth
@@ -526,20 +536,5 @@ def distinguishability(p_private: float, reps: int = 10, recommender: bool = Tru
     return confusion(df, layer=edge_mode)
 
 
-def main(argv=None):  # pragma: no cover
-    import argparse
-    ap = argparse.ArgumentParser(description="Can public data tell replication from attraction or drift?")
-    ap.add_argument("--p-private", type=float, default=0.3)
-    ap.add_argument("--reps", type=int, default=5)
-    ap.add_argument("--no-recommender", action="store_true")
-    ap.add_argument("--workers", type=int, default=1)
-    a = ap.parse_args(argv)
-    print(distinguishability(a.p_private, a.reps, not a.no_recommender, workers=a.workers).round(2).to_string())
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()
-
-
-__all__ = ["WorldParams", "PROCESSES", "simulate", "observe", "evaluate", "composite", "run_one", "sweep",
-           "confusion", "breakdown_fraction", "distinguishability", "asdict", "replace"]
+__all__ = ["WorldParams", "PROCESSES", "params_for_size", "simulate", "observe", "evaluate", "composite", "run_one",
+           "sweep", "confusion", "breakdown_fraction", "distinguishability"]

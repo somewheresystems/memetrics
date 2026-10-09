@@ -1,18 +1,19 @@
-"""Reader for Pump.fun-style token data: launch records become the items table, and daily candles become fitness series.
+"""Reader for Pump.fun-style token data: launch records become the items table, daily candles become fitness series.
 
-Inputs are plain DataFrames and parsed JSON. This module makes no network calls, uses no RPC keys and contains no
-paths. The fitness definitions follow the Pump.fun launch study that this toolkit was first applied to. Its "robust"
-peak counts only days with ≥ $10k USD volume and ≥ 1% of supply traded, which removes single-trade spikes in thin
-pools.
+Inputs are plain DataFrames and parsed JSON that you obtained yourself. This module makes no network calls and
+needs no RPC keys. The "robust" peak counts only days with >= $10k USD volume and >= 1% of supply traded, which
+removes single-trade spikes in thin pools.
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-SUPPLY = 1e9  # Pump.fun tokens have 1e9 whole tokens
+from ..schema import conform
+from . import hash_author
 
-from memetrics.io import hash_author
+SUPPLY = 1e9  # Pump.fun tokens have 1e9 whole tokens
 
 
 def to_items(launches: pd.DataFrame, salt: str, *, id_col="mint", ts_col="created_at", author_col="creator",
@@ -40,7 +41,7 @@ def to_items(launches: pd.DataFrame, salt: str, *, id_col="mint", ts_col="create
         out["topic"] = d[topic_col].to_numpy()
     if engagement_col:
         out["engagement"] = d[engagement_col].to_numpy(float)
-    return out
+    return conform(out)
 
 
 def candles_frame(candles: list[dict], supply: float = SUPPLY) -> pd.DataFrame:

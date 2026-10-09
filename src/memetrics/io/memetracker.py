@@ -12,7 +12,7 @@ Cluster file format::
 Raw quote file: blocks of lines `P url`, `T time`, `Q phrase` (0+), `L link` (0+), separated by blank lines.
 
 `read_clusters` yields three DataFrames (clusters, phrases, mentions). `mentions_to_items` turns mentions into the
-common items table (DESIGN.md): one item per (phrase, url); author = hashed site domain; community = 'blog' or
+items table: one item per (phrase, url); author = hashed site domain; community = 'blog' or
 'news'; unit = cluster id. `iter_documents` streams the raw files (for hyperlink edges).
 """
 from __future__ import annotations
@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 
 import pandas as pd
 
+from ..schema import conform
 from . import hash_author
 
 
@@ -40,8 +41,11 @@ def read_clusters(path: str, min_cluster_mentions: int = 0) -> tuple[pd.DataFram
                 if keep and pid is not None:
                     parts = line[2:].rstrip("\n").split("\t")
                     if len(parts) >= 4:
-                        m_pid.append(pid); m_ts.append(parts[0]); m_fq.append(int(parts[1]))
-                        m_ty.append(parts[2]); m_url.append(parts[3])
+                        m_pid.append(pid)
+                        m_ts.append(parts[0])
+                        m_fq.append(int(parts[1]))
+                        m_ty.append(parts[2])
+                        m_url.append(parts[3])
             elif line.startswith("\t"):
                 parts = line[1:].rstrip("\n").split("\t")
                 if len(parts) >= 4 and keep:
@@ -75,11 +79,11 @@ def mentions_to_items(phrases: pd.DataFrame, mentions: pd.DataFrame, salt: str |
     m = mentions.merge(phrases[["phrase_id", "cluster_id", "text"]], on="phrase_id")
     doms = m.url.map(domain)
     hashed = {d: hash_author(d, salt) for d in doms.unique()}
-    return pd.DataFrame({
+    return conform(pd.DataFrame({
         "item_id": m.phrase_id.astype(str) + "|" + m.url, "ts": m.ts, "author": doms.map(hashed),
         "community": m.url_type.map({"B": "blog", "M": "news"}).fillna("other"), "kind": "text",
         "text": m.text, "unit": m.cluster_id.astype(str), "parent": None, "engagement": m.freq.astype(float),
-        "url": m.url, "phrase_id": m.phrase_id})
+        "url": m.url, "phrase_id": m.phrase_id}))
 
 
 def iter_documents(path: str) -> Iterator[dict]:

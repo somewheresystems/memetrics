@@ -1,6 +1,6 @@
 """Memecoin families, known-meme matching and parent–offspring heritability of market fitness.
 
-Works on the memetrics **items table** (see DESIGN.md), with `kind == "token"`:
+Works on the items table (:mod:`memetrics.schema`) with ``kind == "token"``:
 
 | column | use here |
 |---|---|
@@ -28,7 +28,7 @@ The estimators are:
   This is the distinction between content fitness and limited-attention dynamics drawn by Weng et al. (2012,
   *Sci. Rep.* 2:335).
 - **Families**: earlier items whose normalised name or ticker is identical, or whose pHash is within a Hamming radius
-  (Zauner 2010, pHash benchmark thesis; the radius of 6 is the pumpfun study's rule).
+  (Zauner 2010, pHash benchmark thesis; default radius 6).
 
 No network calls and no project paths. Platform readers live in `memetrics.io.onchain`.
 """
@@ -41,7 +41,8 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from memetrics.result import Result
+from .result import Result
+from .units import hamming64
 
 STRIP_PREFIX = ("the ", "$")
 STRIP_SUFFIX = (" coin", " token", " on solana", " on sol", " sol")
@@ -146,11 +147,6 @@ def attention_features(views: pd.Series, t: pd.Timestamp, long=(365, 31), recent
 
 # ------------------------------------------------------------------ families
 
-def _hamming64(a: int, b: np.ndarray) -> np.ndarray:
-    x = np.bitwise_xor(np.uint64(a), b.astype(np.uint64))
-    return np.unpackbits(x.view(np.uint8).reshape(-1, 8), axis=1).sum(1)
-
-
 def _hours(ts: pd.Series) -> np.ndarray:
     """UTC timestamps as float hours since the epoch (NaT -> NaN), independent of the datetime unit."""
     t = pd.to_datetime(pd.Series(ts), utc=True)
@@ -192,7 +188,7 @@ def find_relatives(offspring: pd.DataFrame, pool: pd.DataFrame, max_hamming: int
             via.update({i: "name" for i in by_tick.get(kt, [])})
         p = getattr(r, "phash", None)
         if has_ph and p is not None and not (isinstance(p, float) and np.isnan(p)):
-            for i in ph_i[_hamming64(int(p), ph_v) <= max_hamming]:
+            for i in ph_i[hamming64(ph_v, int(p)) <= max_hamming]:
                 via[i] = "both" if via.get(i) == "name" else "image"
         for i, v in via.items():
             if ids[i] == r.item_id:
@@ -321,7 +317,7 @@ def heritability(items: pd.DataFrame, parent_col: str = "parent_fitness", y_col:
 
 
 def heritability_verdict(plain: Result, attention_adjusted: Result, attention_terms: dict[str, Result]) -> str:
-    """Combine the decision rule for inheritance versus attention-chasing (PREREG-memecoins §8, MC-c).
+    """Combine the decision rule for inheritance versus attention-chasing.
 
     - `memetic inheritance`: b_PO passes, and so does b_PO with attention terms added.
     - `attention-chasing`: b_PO passes, the adjusted slope fails, and an attention term's CI excludes 0 (> 0).
