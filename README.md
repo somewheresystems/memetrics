@@ -4,6 +4,8 @@ Measure the distinctive claims of memetics (discrete units, high-fidelity copyin
 selection beyond drift, tree-like descent, predictive non-redundancy) on social-media data, next to what rival
 frameworks predict and what the data cannot see.
 
+Paper: [Is Memetics a Field?](https://somewhere.systems/research/memetics) (working paper v1, October 2026).
+
 ## What it measures and why
 
 Dawkins (1976) coined "meme" for a unit of cultural transmission, and Dennett (1995) and Blackmore (1999) developed
@@ -148,14 +150,17 @@ in [docs/readers.md](docs/readers.md).
 
 ## How to cite
 
-If you use memetrics, please cite the paper (details to follow):
+memetrics was built for, and every test in it was run in, the working paper
+[*Is Memetics a Field? A Pre-Registered Test of Its Distinctive Claims on Its Home Turf*](https://somewhere.systems/research/memetics)
+(Bennington 2026). If you use memetrics, please cite it:
 
 ```bibtex
-@unpublished{memetrics2026,
-  author = {{Somewhere Systems}},
-  title  = {{TITLE TO BE ADDED}},
+@unpublished{bennington2026memetics,
+  author = {Bennington, Justin},
+  title  = {Is Memetics a Field? {A} Pre-Registered Test of Its Distinctive Claims on Its Home Turf},
   year   = {2026},
-  note   = {Software: memetrics, https://github.com/somewheresystems/memetrics}
+  note   = {Working paper v1, Somewhere Systems. https://somewhere.systems/research/memetics.
+            Software: memetrics, https://github.com/somewheresystems/memetrics}
 }
 ```
 
