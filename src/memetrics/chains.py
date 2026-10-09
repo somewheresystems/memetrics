@@ -1,7 +1,7 @@
 """Transmission chains: parent inference, per-step fidelity and the attraction (convergence) slope (M2).
 
-Input is the common items table (toolkit/DESIGN.md) with columns `item_id`, `ts`, `text`, `unit` and, for explicit
-edges, `parent`. Edges are (parent -> child) pairs of items in the same unit.
+Input is the items table (:mod:`memetrics.schema`) with columns ``item_id``, ``ts``, ``text``, ``unit`` and, for
+explicit edges, ``parent``. Edges are (parent -> child) pairs of items in the same unit.
 
 Estimators
 ----------
@@ -16,7 +16,7 @@ Estimators
   texts along the observed topology with matched mutation and recomputes beta, which gives the null distribution.
 - Directional asymmetry: among non-identical edges, the share whose child is closer to the medoid than its parent.
 
-Decision rule (STUDY.md, defaults are keyword arguments): replication if median f >= 0.9 and the 95% CI of beta
+Default decision rule (thresholds are keyword arguments): replication if median f >= 0.9 and the 95% CI of beta
 contains 0; attraction if beta is significantly < 0 and median f < 0.9; otherwise "mixed".
 """
 from __future__ import annotations
@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from .result import Result
+from .schema import require
 from .text import medoid, sim_edit
 
 Sim = Callable[[str, str], float]
@@ -37,14 +38,15 @@ Sim = Callable[[str, str], float]
 def infer_parents(items: pd.DataFrame, sim: Sim = sim_edit, max_candidates: int = 2000) -> pd.Series:
     """E2 rule: each item's parent is the most similar *earlier* item of the same unit (ties -> most recent).
 
-    This is a time-ordered guess, not an observed copy event; see notes on star-shaped descent from unobserved
-    sources. Returns a Series of parent item_ids (None for the first item of each unit), indexed like `items`.
+    This is a time-ordered guess, not an observed copy event: when many items copy one unobserved source, the
+    inferred tree is a chain or star that never happened. Returns a Series of parent item_ids (None for the first item of each unit), indexed like `items`.
     Distinct texts are compared once; `max_candidates` caps the number of distinct earlier texts compared
     (the most recent ones are kept).
     """
     from rapidfuzz import process
     from rapidfuzz.distance import Levenshtein
 
+    require(items, ["item_id", "ts", "text", "unit"], "infer_parents")
     out = pd.Series([None] * len(items), index=items.index, dtype=object)
     for _, g in items.dropna(subset=["unit"]).sort_values("ts", kind="stable").groupby("unit", sort=False):
         latest: dict[str, str] = {}      # text -> most recent item_id with that text
@@ -70,6 +72,7 @@ def infer_parents(items: pd.DataFrame, sim: Sim = sim_edit, max_candidates: int 
 def edges_from_items(items: pd.DataFrame, parent_col: str = "parent") -> pd.DataFrame:
     """Edge table (unit, parent_id, child_id, parent_text, child_text, dt) for items whose parent is present
     in the table and in the same unit."""
+    require(items, ["item_id", "ts", "text", "unit", parent_col], "edges_from_items")
     it = items.set_index("item_id")
     c = items.dropna(subset=[parent_col, "unit"])
     c = c[c[parent_col].isin(it.index)]
@@ -84,6 +87,7 @@ def edges_from_items(items: pd.DataFrame, parent_col: str = "parent") -> pd.Data
 
 def unit_medoids(items: pd.DataFrame, cap: int = 1500, seed: int = 20261008) -> dict:
     """Medoid text per unit over distinct variants (ties broken by frequency), as in M1."""
+    require(items, ["unit", "text"], "unit_medoids")
     out = {}
     for u, g in items.dropna(subset=["unit"]).groupby("unit"):
         vc = g["text"].value_counts()
@@ -149,7 +153,8 @@ def toward_share(e: pd.DataFrame) -> float:
 
 
 def m2_verdict(f_med: float, beta_lo: float, beta_hi: float, f_threshold: float = 0.9) -> str:
-    """Literal STUDY.md rule."""
+    """Literal M2 rule: "replication" if f >= ``f_threshold`` and the slope CI contains 0; "attraction" if the
+    slope CI is below 0 and f < ``f_threshold``; else "mixed"."""
     conv = beta_hi < 0
     if f_med >= f_threshold and beta_lo <= 0 <= beta_hi:
         return "replication"
@@ -274,8 +279,8 @@ def m2_test(edges: pd.DataFrame, medoids: dict, sim: Sim = sim_edit, f_threshold
 
     estimate = median per-step fidelity f; detail holds beta (convergence slope) with CI, the share of identical
     copies, the toward-medoid share and, if `null_sims` > 0, the calibrated replicator null and calibrated verdict.
-    verdict = literal STUDY rule (`m2_verdict`). detail['verdict_m2a'] applies the fidelity threshold to
-    derivatives only (f < 1), so verbatim copies cannot carry the fidelity row (notes/DEVIATIONS.md text D4).
+    verdict = literal rule (:func:`m2_verdict`). ``detail['verdict_m2a']`` applies the fidelity threshold to
+    derivatives only (f < 1), so verbatim copies (reposts) cannot carry the fidelity criterion on their own.
     """
     st = edge_stats(edges, medoids, sim)
     f_med, f_lo, f_hi = median_fidelity(st, n_boot, seed)

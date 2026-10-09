@@ -1,6 +1,6 @@
 """Meme units: perceptual-hash grouping, clustering and unit-discreteness statistics (hypothesis M1).
 
-Works on any embedding (image or text). Definitions (shared by the image and text analyses of the study):
+Works on any embedding (image or text); :mod:`memetrics.text` applies the same statistics to edit similarity.
 
 - ``w_i`` = cosine similarity of item i to the medoid of its own unit; ``b_i`` = cosine similarity to the medoid of
   the nearest other unit (the unit whose medoid is most similar to i).
@@ -10,7 +10,7 @@ Works on any embedding (image or text). Definitions (shared by the image and tex
   unit v: i is at least as close to v as 90% of v's own members.
 - Silhouette: Rousseeuw (1987), J. Comput. Appl. Math. 20:53-65, doi:10.1016/0377-0427(87)90125-7, cosine distance.
 
-Default decision rule (study pre-registration): "units" if median D > 2 and blend share < 0.10; "continuum" if median
+Default decision rule (:func:`m1_verdict`): "units" if median D > 2 and blend share < 0.10; "continuum" if median
 D < 2 or blend share > 0.25; otherwise "intermediate".
 
 No network calls; embeddings are computed elsewhere (e.g. ``memetrics.io`` image readers).
@@ -137,7 +137,8 @@ def cluster_hdbscan(emb: np.ndarray, min_cluster_size: int = 10, min_samples: in
 
 
 def knn(x: np.ndarray, k: int, chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
-    """Exact k nearest neighbours (Euclidean, self included at position 0). Uses torch on GPU when available."""
+    """Exact k nearest neighbours (Euclidean, self included at position 0). Uses torch on a CUDA GPU when
+    available, else scikit-learn."""
     try:
         import torch
         dev = "cuda" if torch.cuda.is_available() else None
@@ -169,7 +170,9 @@ def hdbscan_knn(x: np.ndarray, min_cluster_size: int = 10, min_samples: int = 5,
     edges; disconnected components joined at the top of the hierarchy) is condensed and clusters are selected with the
     reference ``hdbscan`` package's tree code (McInnes, Healy & Astels 2017, JOSS 2(11):205, doi:10.21105/joss.00205).
     Exact HDBSCAN uses the full mutual-reachability MST; restricting to kNN edges is the standard large-n approximation
-    and changes only merges between points that are not mutual k-neighbours of anything in between."""
+    and changes only merges between points that are not mutual k-neighbours of anything in between.
+
+    Requires the ``hdbscan`` package (``pip install memetrics[image]`` or ``[text]``)."""
     import scipy.sparse as sp
     from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
     from hdbscan._hdbscan_linkage import label
@@ -221,9 +224,25 @@ def medoids(emb: np.ndarray, labels: np.ndarray, max_items: int = 2000, seed: in
 
 
 def ashman_d(w: np.ndarray, b: np.ndarray) -> float:
-    """Ashman's D between two samples (Ashman, Bird & Zepf 1994)."""
-    v = np.var(w, ddof=1) + np.var(b, ddof=1) if len(w) > 1 else np.nan
-    return float(np.sqrt(2) * abs(np.mean(w) - np.mean(b)) / np.sqrt(v)) if v and v > 0 else np.inf
+    """Ashman, Bird & Zepf (1994) bimodality separation of two samples:
+    ``sqrt(2) |mean(w) - mean(b)| / sqrt(var(w) + var(b))``. Zero spread gives inf (NaN if the means are equal).
+    Computed in the input dtype."""
+    w, b = np.asarray(w), np.asarray(b)
+    den = np.sqrt(np.var(w, ddof=1) + np.var(b, ddof=1)) if len(w) > 1 and len(b) > 1 else np.nan
+    if not np.isfinite(den) or den == 0:
+        return np.inf if abs(w.mean() - b.mean()) > 0 else np.nan
+    return float(np.sqrt(2) * abs(w.mean() - b.mean()) / den)
+
+
+def m1_verdict(median_D: float, blend_share: float, d_threshold: float = 2.0, blend_units: float = 0.10,
+               blend_continuum: float = 0.25) -> str:
+    """Default M1 rule: "units" if median D > ``d_threshold`` and blend share < ``blend_units``; "continuum" if
+    median D < ``d_threshold`` or blend share > ``blend_continuum``; otherwise "intermediate"."""
+    if median_D > d_threshold and blend_share < blend_units:
+        return "units"
+    if median_D < d_threshold or blend_share > blend_continuum:
+        return "continuum"
+    return "intermediate"
 
 
 def unit_stats(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, seed: int = 0) -> pd.DataFrame:
@@ -262,6 +281,7 @@ def unit_stats(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, seed: in
 
 
 def silhouette_cos(emb: np.ndarray, labels: np.ndarray, max_n: int = 20_000, seed: int = 0) -> float:
+    """Mean silhouette (Rousseeuw 1987) on cosine distance over a seeded sample of clustered items."""
     from sklearn.metrics import silhouette_score
 
     m = np.flatnonzero(labels >= 0)
@@ -271,7 +291,7 @@ def silhouette_cos(emb: np.ndarray, labels: np.ndarray, max_n: int = 20_000, see
     return float(silhouette_score(_unit(emb)[m], labels[m], metric="cosine"))
 
 
-def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_units: float = 2.0,
+def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_threshold: float = 2.0,
                  blend_units: float = 0.10, blend_continuum: float = 0.25, n_boot: int = 2000, seed: int = 0,
                  name: str = "M1 discreteness", stats: pd.DataFrame | None = None,
                  mask: np.ndarray | None = None) -> Result:
@@ -280,9 +300,8 @@ def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_unit
     ``stats``: precomputed ``unit_stats`` output (reuse across subsets). ``mask``: summarize only these items (e.g.
     one genre); nearest-unit competitors still include every unit. Infinite D (zero spread) counts as very large.
 
-    ``verdict``: "units" if median D > ``d_units`` and blend share < ``blend_units``; "continuum" if median D <
-    ``d_units`` or blend share > ``blend_continuum``; else "intermediate". If more than half the items are noise, the
-    verdict is suffixed " (clustered minority)".
+    ``verdict``: :func:`m1_verdict` with the given thresholds. If more than half the items are noise, the verdict is
+    suffixed " (clustered minority)".
     """
     labels = np.asarray(labels)
     st = unit_stats(emb, labels, min_unit=min_unit, seed=seed) if stats is None else stats
@@ -298,12 +317,7 @@ def discreteness(emb: np.ndarray, labels: np.ndarray, min_unit: int = 10, d_unit
     blend = float(st.loc[clustered, "blend"].mean())
     noise = float(1 - clustered.mean())
     med = float(np.median(Ds)) if len(Ds) else np.nan
-    if med > d_units and blend < blend_units:
-        v = "units"
-    elif med < d_units or blend > blend_continuum:
-        v = "continuum"
-    else:
-        v = "intermediate"
+    v = m1_verdict(med, blend, d_threshold, blend_units, blend_continuum)
     if noise > 0.5:
         v += " (clustered minority)"
     try:

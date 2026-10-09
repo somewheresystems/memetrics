@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import warnings
+
 from scipy import stats
 
 from .result import Result
@@ -91,7 +93,7 @@ def wf_sampled(x0: float, gens: np.ndarray, n_sample: np.ndarray, Ne: float, s: 
 
 
 def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), gen_unit: float = 1.0,
-                   reps: int = 200, n_sets: int = 1000, q: float = 0.05, s_grid=(0.01, 0.05, 0.1),
+                   reps: int = 200, n_sets: int = 1000, fdr: float = 0.05, s_grid=(0.01, 0.05, 0.1),
                    seed: int = 0, name: str = "M4 FIT") -> Result:
     """FIT on observed trajectories with a matched Wright-Fisher null.
 
@@ -100,10 +102,20 @@ def fit_calibrated(trajs: list[pd.DataFrame], Ne_grid=(1_000, 10_000, 100_000), 
     are simulated with the observed x0, bin times and sample sizes; the null distribution of the BH rejection share
     is built from ``n_sets`` random draws of one replicate per trajectory.
 
-    verdict: "selection beyond drift" if the observed BH share exceeds the null 97.5th percentile for every N_e;
-    "drift-compatible" if inside the central 95% for some N_e; else "ambiguous".
+    verdict: "selection beyond drift" if the observed BH share (FDR ``fdr``) exceeds the null 97.5th percentile for
+    every N_e; "drift-compatible" if inside the central 95% for some N_e; else "ambiguous".
+
+    Null trajectories are simulated at whole generations ``round((t - t0) / gen_unit)``. If two bins round to the
+    same generation the null FIT increments are undefined (dt = 0) and those null p-values are NaN; a warning is
+    raised. Choose ``gen_unit`` no larger than the smallest bin spacing.
     """
+    q = fdr
     rng = np.random.default_rng(seed)
+    collide = sum(np.any(np.diff(np.round((d.t.to_numpy() - d.t.iloc[0]) / gen_unit)) == 0) for d in trajs)
+    if collide:
+        warnings.warn(f"{collide} of {len(trajs)} trajectories have bins closer than one generation (gen_unit="
+                      f"{gen_unit}); their null FIT p-values are NaN, which deflates the null rejection share",
+                      stacklevel=2)
     obs_p = []
     for d in trajs:
         obs_p.append(fit_test(d["count"] / d["n"], d.t / gen_unit)[1])

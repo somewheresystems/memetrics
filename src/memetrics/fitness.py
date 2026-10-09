@@ -18,7 +18,7 @@ Confidence intervals: pigeonhole bootstrap for crossed data (Owen 2007, "The pig
 1, doi:10.1214/07-AOAS122): independent Poisson(1) weights for every content and every author, item
 weight = product.
 
-Default decision rule (study pre-registration): content ICC >= 0.5 "content dominates"; < 0.2 "weak content fitness";
+Default decision rule (:func:`m3_verdict`): content ICC >= 0.5 "content dominates"; < 0.2 "weak content fitness";
 otherwise "intermediate".
 """
 from __future__ import annotations
@@ -29,6 +29,12 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import lsqr
 
 from .result import Result
+from .schema import require
+
+
+def m3_verdict(icc: float, strong: float = 0.5, weak: float = 0.2) -> str:
+    """Default M3 rule on the content ICC."""
+    return "content dominates" if icc >= strong else "weak content fitness" if icc < weak else "intermediate"
 
 
 def residualize(df: pd.DataFrame, y: str, fixed: list[str]) -> np.ndarray:
@@ -85,7 +91,7 @@ def crossed_components(r: np.ndarray, content: np.ndarray, author: np.ndarray,
 
 def content_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", author: str = "author",
                 fixed: list[str] | None = None, n_boot: int = 2000, seed: int = 0,
-                dominate: float = 0.5, weak: float = 0.2, name: str = "M3 content ICC") -> Result:
+                strong: float = 0.5, weak: float = 0.2, name: str = "M3 content ICC") -> Result:
     """Identical-content natural experiment (M3): content ICC vs author ICC.
 
     ``df`` is an items table (one row per posting). ``content`` identifies identical content (e.g. a pHash group);
@@ -93,6 +99,7 @@ def content_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", 
     columns (e.g. community x era, hour-of-week, repost order). Returns a Result for the content ICC with
     ``detail`` holding the author ICC, their difference, and bootstrap CIs for each.
     """
+    require(df, [y, content, author] + list(fixed or []), "content_icc")
     rng = np.random.default_rng(seed)
     r = residualize(df, y, fixed or []) if fixed else df[y].to_numpy(float) - df[y].mean()
     cc = pd.factorize(df[content])[0]
@@ -107,9 +114,9 @@ def content_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", 
     B["diff"] = B.icc_content - B.icc_author
     q = lambda col: (float(B[col].quantile(0.025)), float(B[col].quantile(0.975)))  # noqa: E731
     ic = est["icc_content"]
-    verdict = "content dominates" if ic >= dominate else "weak content fitness" if ic < weak else "intermediate"
+    verdict = m3_verdict(ic, strong, weak)
     lo, hi = q("icc_content")
-    region = lambda v: 2 if v >= dominate else 0 if v < weak else 1  # noqa: E731
+    region = lambda v: 2 if v >= strong else 0 if v < weak else 1  # noqa: E731
     detail = dict(est, icc_author_ci=q("icc_author"), diff=ic - est["icc_author"], diff_ci=q("diff"),
                   ci_in_one_region=region(lo) == region(hi), n_contents=int(cc.max() + 1),
                   n_authors=int(aa.max() + 1))

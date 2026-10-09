@@ -1,8 +1,7 @@
-"""REML crossed random-effects variance components (M3), the estimator pre-registered for the text analyses.
+"""REML crossed random-effects variance components (M3).
 
-`fitness.py` (image workstream) estimates the same crossed model by pairwise moment U-statistics (Gao & Owen
-2017), which is fast and is the package default. This module adds the REML fit that notes/PREREG-text.md names
-as primary for the text data. It uses the penalized least-squares formulation of lme4 (Bates, Maechler, Bolker & Walker 2015,
+:mod:`memetrics.fitness` estimates the same crossed model by pairwise moment U-statistics (Gao & Owen 2017), which
+is fast and is the package default. This module adds the REML fit. It uses the penalized least-squares formulation of lme4 (Bates, Maechler, Bolker & Walker 2015,
 J. Stat. Softw. 67(1), doi:10.18637/jss.v067.i01), with a sparse LU for the log-determinant. Reporting both
 estimators gives an estimator-robustness check.
 """
@@ -15,10 +14,9 @@ import pandas as pd
 from scipy import optimize, sparse
 from scipy.sparse.linalg import splu
 
-from .fitness import oneway_icc
+from .fitness import m3_verdict, oneway_icc
 from .result import Result
-
-
+from .schema import require
 
 def _indicator(codes: np.ndarray, n_levels: int) -> sparse.csc_matrix:
     n = len(codes)
@@ -88,7 +86,7 @@ def _design(df: pd.DataFrame, fixed: list[str]) -> np.ndarray:
     return np.column_stack([np.ones(len(df)), X.to_numpy(float)])
 
 
-def reml_icc(df: pd.DataFrame, y: str = "y", content: str = "content", author: str = "author",
+def reml_icc(df: pd.DataFrame, y: str = "engagement", content: str = "unit", author: str = "author",
              fixed: list[str] | None = None, n_boot: int = 200, seed: int = 20261008,
              strong: float = 0.5, weak: float = 0.2, name: str = "M3 content ICC (REML)",
              bootstrap: str = "parametric") -> Result:
@@ -96,11 +94,12 @@ def reml_icc(df: pd.DataFrame, y: str = "y", content: str = "content", author: s
     random-effects REML fit with fixed effects `fixed` (categorical columns are dummy-coded, numeric kept).
 
     CI: parametric bootstrap from the fitted model (default). `bootstrap="groups"` resamples content groups, which
-    duplicates authors' rows and biases the author component upward; it is kept only for comparison. verdict (STUDY.md defaults):
-    'content dominates' if ICC >= strong, 'weak content fitness' if < weak, else 'intermediate'.
+    duplicates authors' rows and biases the author component upward; it is kept only for comparison.
+    verdict = :func:`memetrics.fitness.m3_verdict`.
     detail: author ICC, variance components, the unadjusted one-way content ICC, and P(content ICC > author ICC).
     """
     fixed = fixed or []
+    require(df, [y, content, author] + fixed, "reml_icc")
     d = df.reset_index(drop=True)
 
     def fit(dd, x0=None):
@@ -122,7 +121,6 @@ def reml_icc(df: pd.DataFrame, y: str = "y", content: str = "content", author: s
         aa = pd.factorize(d[author])[0]
         sc_, sa_ = np.sqrt(r["var"][0]), np.sqrt(r["var"][1])
         se_ = np.sqrt(r["sigma2"])
-        yy = d[y].to_numpy(float)
         for _ in range(n_boot):
             ys = mu + rng.normal(0, sc_, cc.max() + 1)[cc] + rng.normal(0, sa_, aa.max() + 1)[aa] \
                 + rng.normal(0, se_, len(d))
@@ -133,7 +131,6 @@ def reml_icc(df: pd.DataFrame, y: str = "y", content: str = "content", author: s
             tot = sum(rr["var"]) + rr["sigma2"]
             bc.append(rr["var"][0] / tot)
             ba.append(rr["var"][1] / tot)
-        del yy
     else:
         groups = d.groupby(content).indices
         keys = list(groups)
@@ -152,7 +149,7 @@ def reml_icc(df: pd.DataFrame, y: str = "y", content: str = "content", author: s
                 continue
     bc, ba = np.array(bc), np.array(ba)
     lo, hi = (np.quantile(bc, [0.025, 0.975]) if len(bc) else (np.nan, np.nan))
-    verdict = "content dominates" if ic >= strong else ("weak content fitness" if ic < weak else "intermediate")
+    verdict = m3_verdict(ic, strong, weak)
     detail = {"author_icc": ia, "author_icc_ci": list(np.quantile(ba, [0.025, 0.975])) if len(ba) else None,
               "var_content": r["var"][0], "var_author": r["var"][1], "var_resid": r["sigma2"],
               "oneway_content_icc": oneway_icc(d[y].to_numpy(), d[content].to_numpy()),

@@ -708,9 +708,9 @@
       "share_units_D_gt_2": 1.0,
       "silhouette": 0.5476236343383789,
       "thresholds": {
-       "D": 2.0,
-       "blend_hi": 0.25,
-       "blend_lo": 0.1
+       "blend_continuum": 0.25,
+       "blend_units": 0.1,
+       "d_threshold": 2.0
       }
      },
      "estimate": 6.576588675514792,
@@ -896,9 +896,9 @@
       "share_units_D_gt_2": 1.0,
       "silhouette": 0.794146716594696,
       "thresholds": {
-       "D": 2.0,
-       "blend_hi": 0.25,
-       "blend_lo": 0.1
+       "blend_continuum": 0.25,
+       "blend_units": 0.1,
+       "d_threshold": 2.0
       }
      },
      "estimate": 17.600526342771595,
@@ -1126,9 +1126,9 @@
       "share_units_D_gt_2": 1.0,
       "silhouette": 0.8579567074775696,
       "thresholds": {
-       "D": 2.0,
-       "blend_hi": 0.25,
-       "blend_lo": 0.1
+       "blend_continuum": 0.25,
+       "blend_units": 0.1,
+       "d_threshold": 2.0
       }
      },
      "estimate": 27.042841043774544,
@@ -1314,9 +1314,9 @@
       "share_units_D_gt_2": 1.0,
       "silhouette": 0.8119618892669678,
       "thresholds": {
-       "D": 2.0,
-       "blend_hi": 0.25,
-       "blend_lo": 0.1
+       "blend_continuum": 0.25,
+       "blend_units": 0.1,
+       "d_threshold": 2.0
       }
      },
      "estimate": 23.096138436161343,
@@ -1772,9 +1772,9 @@
     "share_units_D_gt_2": 1.0,
     "silhouette": 0.897369921207428,
     "thresholds": {
-     "D": 2.0,
-     "blend_hi": 0.25,
-     "blend_lo": 0.1
+     "blend_continuum": 0.25,
+     "blend_units": 0.1,
+     "d_threshold": 2.0
     }
    },
    "estimate": 44.96017683070856,
@@ -1844,9 +1844,9 @@
     "share_units_D_gt_2": 1.0,
     "silhouette": "nan",
     "thresholds": {
-     "D": 2.0,
-     "blend_hi": 0.25,
-     "blend_lo": 0.1
+     "blend_continuum": 0.25,
+     "blend_units": 0.1,
+     "d_threshold": 2.0
     }
    },
    "estimate": 52.28738578094812,

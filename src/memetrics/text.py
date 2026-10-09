@@ -1,34 +1,39 @@
-"""Text normalization, similarity, near-duplicate units and unit-discreteness statistics (M1).
+"""Text normalization, similarity, near-duplicate units and unit-discreteness statistics (M1 for text).
 
-Definitions follow notes/PREREG-text.md sections 2-3.
+- ``normalize(t)``: NFKC, lowercase, URLs -> ``<url>``, @handles -> ``<user>``, punctuation except ' and # removed,
+  whitespace collapsed.
+- ``sim_edit(a, b) = 1 - Levenshtein_char / max(len)``: the primary similarity. ``sim_word``: the same on word
+  tokens.
+- ``minhash_units(texts, tau)``: connected components of word-5-shingle Jaccard >= tau (MinHash LSH plus an exact
+  check of candidate pairs).
+- ``unit_stats(items, labels)``: medoids, within/between similarity, Ashman's D per unit, blend flags.
+- ``m1_test(items_table)``: the M1 decision on an items table (columns ``text``, ``unit``).
 
-- normalize(t): NFKC, lowercase, URLs -> <url>, @handles -> <user>, strip punctuation except ' and #,
-  collapse whitespace.
-- sim_edit(a, b) = 1 - Levenshtein_char / max(len): the primary similarity.
-- sim_word(a, b): the same on word tokens.
-- minhash_units(texts, tau): connected components of word-5-shingle Jaccard >= tau (MinHash LSH + exact check).
-- unit_stats(items, labels): medoids, within/between similarity, Ashman's D per unit, blend flags, silhouette.
-- m1_test(items_table): the M1 decision on the common items table (columns `text`, `unit`).
+Ashman's D: Ashman, Bird & Zepf (1994). Silhouette: Rousseeuw (1987). Using D on own-medoid versus
+nearest-other-medoid similarities, and the blend rule, are this package's operationalization (shared with
+:mod:`memetrics.units`, which works on embeddings).
 
-Ashman's D: Ashman, Bird & Zepf (1994), "Detecting bimodality in astronomical datasets". Silhouette: Rousseeuw (1987).
-The blend rule and the use of D on own-medoid vs nearest-other-medoid similarities are our operationalization
-(notes/PREREG-text.md section 3). The image workstream's `units.py` implements the same statistics on embeddings;
-these text versions work on any similarity function (edit distance by default).
+Similarity matrices use ``$MEMETRICS_WORKERS`` rapidfuzz threads (default -1 = all cores; set 1 inside process
+pools).
 """
+
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 import zlib
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 from rapidfuzz import process
 from rapidfuzz.distance import Levenshtein
 
-import os
+from .result import Result
+from .schema import require
+from .units import ashman_d, m1_verdict
 
-# rapidfuzz worker threads for similarity matrices (-1 = all cores); set MEMETRICS_WORKERS=1 inside process pools.
 WORKERS = int(os.environ.get("MEMETRICS_WORKERS", "-1"))
 
 _URL = re.compile(r"https?://\S+|www\.\S+")
@@ -54,6 +59,7 @@ def sim_edit(a: str, b: str) -> float:
 
 
 def sim_word(a: str, b: str) -> float:
+    """``sim_edit`` on word tokens."""
     return Levenshtein.normalized_similarity(a.split(), b.split())
 
 
@@ -155,15 +161,6 @@ def threshold_components(texts: list[str], tau: float, words: bool = False) -> n
 
 # ---------------------------------------------------------------- M1 statistics
 
-def ashman_d(w: np.ndarray, b: np.ndarray) -> float:
-    """Ashman, Bird & Zepf (1994) bimodality separation for two samples."""
-    w, b = np.asarray(w, float), np.asarray(b, float)
-    den = np.sqrt(w.var(ddof=1) + b.var(ddof=1)) if len(w) > 1 and len(b) > 1 else np.nan
-    if not np.isfinite(den) or den == 0:
-        return np.inf if abs(w.mean() - b.mean()) > 0 else np.nan
-    return float(np.sqrt(2) * abs(w.mean() - b.mean()) / den)
-
-
 def medoid(items: list[str], weights: np.ndarray | None = None, words: bool = False, cap: int = 1500,
            seed: int = 20261008) -> int:
     """Index of the item maximizing summed similarity to the others (sampled to `cap` columns)."""
@@ -195,7 +192,7 @@ class UnitResult:
         D = self.D[np.isfinite(self.D)]
         return {"n_units": int(len(self.unit_ids)), "n_items": int(len(self.w)),
                 "median_D": float(np.median(D)) if len(D) else np.nan,
-                "pooled_D": ashman_d(self.w, self.b),
+                "pooled_D": _ashman64(self.w, self.b),
                 "blend_share": float(self.blend.mean()) if len(self.blend) else np.nan}
 
 
@@ -249,7 +246,7 @@ def unit_stats(items: list[str], labels: np.ndarray, weights: np.ndarray | None 
     q10 = np.array([np.quantile(w[g], 0.10) for g in groups])
     blend = b >= q10[nearest]
     analysed = [g for g in range(len(uniq)) if len(groups[g]) >= min_items]
-    D = np.array([ashman_d(w[groups[g]], b[groups[g]]) for g in analysed])
+    D = np.array([_ashman64(w[groups[g]], b[groups[g]]) for g in analysed])
     keep = np.isin(inv, analysed)
     return UnitResult(unit_ids=uniq[analysed], D=D, n_items=np.array([len(groups[g]) for g in analysed]),
                       item_unit=labels[keep], w=w[keep], b=b[keep], nearest=uniq[nearest][keep],
@@ -301,6 +298,7 @@ def silhouette(items: list[str], labels: np.ndarray, n: int = 20000, words: bool
 
 
 def bootstrap_median(x: np.ndarray, B: int = 1000, seed: int = 20261008) -> tuple[float, float, float]:
+    """(median, 2.5%, 97.5%) of the finite values of ``x``; non-finite values are dropped first."""
     x = np.asarray(x, float)
     x = x[np.isfinite(x)]
     if len(x) == 0:
@@ -310,27 +308,16 @@ def bootstrap_median(x: np.ndarray, B: int = 1000, seed: int = 20261008) -> tupl
     return float(np.median(x)), float(np.quantile(bs, 0.025)), float(np.quantile(bs, 0.975))
 
 
-def m1_verdict(median_D: float, blend_share: float, d_threshold: float = 2.0, blend_lo: float = 0.10,
-               blend_hi: float = 0.25) -> str:
-    """STUDY.md rule: units if D > 2 and blends < 10%; continuum if D < 2 or blends > 25%."""
-    if median_D > d_threshold and blend_share < blend_lo:
-        return "units"
-    if median_D < d_threshold or blend_share > blend_hi:
-        return "continuum"
-    return "intermediate"
+def m1_test(items: pd.DataFrame, min_items: int = 5, words: bool = False, weighted: bool = False,
+            n_boot: int = 2000, silhouette_n: int = 5000, gap: bool = True, d_threshold: float = 2.0,
+            blend_units: float = 0.10, blend_continuum: float = 0.25, seed: int = 20261008, name: str = "M1") -> Result:
+    """M1 on an items table (columns ``text``, ``unit``). Items are deduplicated to distinct (unit, text) variants;
+    ``weighted=True`` weights the blend share by mention counts instead.
 
-
-def m1_test(items, min_items: int = 5, words: bool = False, weighted: bool = False, n_boot: int = 2000,
-            silhouette_n: int = 5000, gap: bool = True, d_threshold: float = 2.0, blend_lo: float = 0.10, blend_hi: float = 0.25,
-            seed: int = 20261008, name: str = "M1"):
-    """M1 on an items table (columns `text`, `unit`). Items are deduplicated to distinct (unit, text) variants;
-    `weighted=True` weights blend share and pooled D by mention counts instead.
-
-    estimate = median per-unit Ashman's D (bootstrap CI over units); detail: blend share, pooled D, silhouette.
+    estimate = median per-unit Ashman's D over units with finite D (bootstrap CI over units); detail: blend share,
+    pooled D, silhouette and the boundary-gap diagnostic. verdict = :func:`memetrics.units.m1_verdict`.
     """
-    import pandas as pd
-
-    from .result import Result
+    require(items, ["unit", "text"], "m1_test")
     d = items.dropna(subset=["unit"])
     v = d.groupby(["unit", "text"]).size().rename("n").reset_index()
     r = unit_stats(list(v.text), v.unit.to_numpy(), v.n.to_numpy(), min_items=min_items, words=words)
@@ -343,12 +330,18 @@ def m1_test(items, min_items: int = 5, words: bool = False, weighted: bool = Fal
     # nearest unit of each analysed unit = the most common nearest-other-unit among its items
     nn_unit = pd.Series(r.nearest).groupby(r.item_unit).agg(lambda x: x.value_counts().index[0]).to_dict()
     gaps = gap_ratio(list(v.text), v.unit.to_numpy(), nn_unit, words=words, seed=seed) if gap else {}
-    detail = {"blend_share": blend, "pooled_D": ashman_d(r.w, r.b), "silhouette": sil,
+    detail = {"blend_share": blend, "pooled_D": _ashman64(r.w, r.b), "silhouette": sil,
               "median_gap_ratio": float(np.median(list(gaps.values()))) if gaps else np.nan,
               "D_quantiles": {q: float(np.quantile(r.D[np.isfinite(r.D)], q)) for q in (0.1, 0.25, 0.5, 0.75, 0.9)}
               if np.isfinite(r.D).any() else {},
               "share_units_D_gt_2": float((r.D > 2).mean()) if len(r.D) else np.nan,
               "D_hist": np.histogram(np.clip(r.D[np.isfinite(r.D)], 0, 10), bins=40, range=(0, 10))[0].tolist(),
               "n_units": int(len(r.unit_ids)), "mean_within": float(r.w.mean()), "mean_between": float(r.b.mean()),
-              "thresholds": {"D": d_threshold, "blend_lo": blend_lo, "blend_hi": blend_hi}}
-    return Result(name, med, lo, hi, int(len(keep)), detail, m1_verdict(med, blend, d_threshold, blend_lo, blend_hi))
+              "thresholds": {"d_threshold": d_threshold, "blend_units": blend_units,
+                             "blend_continuum": blend_continuum}}
+    return Result(name, med, lo, hi, int(len(keep)), detail,
+                  m1_verdict(med, blend, d_threshold, blend_units, blend_continuum))
+
+
+def _ashman64(w, b) -> float:
+    return ashman_d(np.asarray(w, float), np.asarray(b, float))
