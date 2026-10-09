@@ -37,3 +37,11 @@ def test_discreteness_separated_vs_gaussian():
     lab_z = (z[:, 0] > 0).astype(int) + 2 * (z[:, 1] > 0)
     rz = discreteness(z, lab_z, n_boot=200)
     assert rz.verdict.startswith("continuum")
+
+
+def test_identical_groups_joins_earliest_when_rows_unsorted():
+    # rows 0 and 1 are two representatives (5 bits apart); row 2 is within 4 bits of both. Row 1 was posted first,
+    # so row 2 must join row 1 although row 0 has the lower row index
+    ph = np.array([0b11111, 0, 0b111], dtype=np.uint64)
+    g = identical_groups(ph, ts=np.array([5.0, 1.0, 9.0]))
+    assert g.tolist() == [0, 1, 1]

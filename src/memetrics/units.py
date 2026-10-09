@@ -63,6 +63,8 @@ def identical_groups(
     shifts = np.cumsum([0] + widths[:-1])
     tables: list[dict] = [dict() for _ in range(nb)]
     group = np.full(n, -1, dtype=np.int64)
+    rank = np.empty(n, dtype=np.int64)
+    rank[order] = np.arange(n)  # position in time order: candidates are tried earliest first
     toks = [len(t.split()) if isinstance(t, str) else 0 for t in text] if text is not None else None
     for i in order:
         h = int(ph[i])
@@ -71,7 +73,7 @@ def identical_groups(
         for t, k in zip(tables, keys):
             cand.update(t.get(k, ()))
         best = -1
-        for r in sorted(cand):  # representatives in insertion order ~ time order; first match = earliest
+        for r in sorted(cand, key=lambda j: rank[j]):  # representatives in time order; first match = earliest
             if bin(h ^ int(ph[r])).count("1") > max_hamming:
                 continue
             if emb is not None and float(emb[i] @ emb[r]) < min_cos:
@@ -259,12 +261,13 @@ def medoids(emb: np.ndarray, labels: np.ndarray, max_items: int = 2000, seed: in
 
 def ashman_d(w: np.ndarray, b: np.ndarray) -> float:
     """Ashman, Bird & Zepf (1994) bimodality separation of two samples:
-    ``sqrt(2) |mean(w) - mean(b)| / sqrt(var(w) + var(b))``. Zero spread gives inf (NaN if the means are equal).
+    ``sqrt(2) |mean(w) - mean(b)| / sqrt(var(w) + var(b))``. Zero spread gives inf (NaN if the means are equal or a
+    sample has fewer than two values).
     Computed in the input dtype."""
     w, b = np.asarray(w), np.asarray(b)
     den = np.sqrt(np.var(w, ddof=1) + np.var(b, ddof=1)) if len(w) > 1 and len(b) > 1 else np.nan
     if not np.isfinite(den) or den == 0:
-        return np.inf if abs(w.mean() - b.mean()) > 0 else np.nan
+        return np.inf if np.isfinite(den) and abs(w.mean() - b.mean()) > 0 else np.nan
     return float(np.sqrt(2) * abs(w.mean() - b.mean()) / den)
 
 

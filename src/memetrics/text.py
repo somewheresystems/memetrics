@@ -198,7 +198,8 @@ class UnitResult:
     medoids: dict
 
     def summary(self) -> dict:
-        D = self.D[np.isfinite(self.D)]
+        D = _d_for_median(self.D)
+        D = D[np.isfinite(D)]
         return {
             "n_units": int(len(self.unit_ids)),
             "n_items": int(len(self.w)),
@@ -370,7 +371,7 @@ def m1_test(
     d = items.dropna(subset=["unit"])
     v = d.groupby(["unit", "text"]).size().rename("n").reset_index()
     r = unit_stats(list(v.text), v.unit.to_numpy(), v.n.to_numpy(), min_items=min_items, words=words)
-    med, lo, hi = bootstrap_median(r.D, n_boot, seed)
+    med, lo, hi = bootstrap_median(_d_for_median(r.D), n_boot, seed)
     keep = v[v.unit.isin(r.unit_ids)]
     wts = keep.n.to_numpy(float) if weighted else np.ones(len(keep))
     blend = float(np.average(r.blend, weights=wts)) if len(wts) else np.nan
@@ -400,6 +401,13 @@ def m1_test(
     return Result(
         name, med, lo, hi, int(len(keep)), detail, m1_verdict(med, blend, d_threshold, blend_units, blend_continuum)
     )
+
+
+def _d_for_median(D: np.ndarray) -> np.ndarray:
+    """Per-unit D for medians: zero-spread units (D = inf) count as very large (1e6), as in
+    :func:`memetrics.units.discreteness`; NaN (undefined) units are dropped by :func:`bootstrap_median`."""
+    D = np.asarray(D, float)
+    return np.where(np.isposinf(D), 1e6, D)
 
 
 def _ashman64(w, b) -> float:
