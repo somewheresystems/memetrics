@@ -17,10 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-image = ["torch", "open_clip_torch", "imagehash", "pillow", "hdbscan"]
-text = ["sentence-transformers", "hdbscan"]
-bluesky = ["websockets>=12", "zstandard"]
-onchain = ["imagehash", "pillow"]
+image = ["torch>=2.1", "open_clip_torch>=2.20", "imagehash>=4.3", "pillow>=10", "hdbscan>=0.8.33"]
+text = ["sentence-transformers>=2.2", "hdbscan>=0.8.33"]
+bluesky = ["websockets>=12", "zstandard>=0.22"]
+onchain = ["imagehash>=4.3", "pillow>=10"]
 all = ["memetrics[image,text,bluesky,onchain]"]
 
 [project.scripts]

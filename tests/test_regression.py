@@ -8,9 +8,12 @@ import sys
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "regression"))
-from cases import CASES  # noqa: E402
+from cases import CASES, environment  # noqa: E402
 
 GOLDEN = json.loads((pathlib.Path(__file__).parent / "regression" / "golden.json").read_text())
+# Outputs depend on numpy/scipy/scikit-learn/pandas algorithms (sampling, solvers), so the pins are enforced only in
+# the environment they were generated in (the locked environment on Python >= 3.12). Elsewhere they are skipped.
+SAME_ENV = environment() == GOLDEN["_env"]
 
 
 def _close(a, b, path="", rtol=1e-7, atol=1e-10):
@@ -28,6 +31,7 @@ def _close(a, b, path="", rtol=1e-7, atol=1e-10):
         assert a == b, f"{path}: {a!r} != {b!r}"
 
 
+@pytest.mark.skipif(not SAME_ENV, reason=f"goldens pinned under {GOLDEN['_env']}, running {environment()}")
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_pinned(name):
     _close(json.loads(json.dumps(CASES[name]())), GOLDEN[name], name)

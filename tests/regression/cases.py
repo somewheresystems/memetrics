@@ -12,6 +12,15 @@ import math
 import numpy as np
 import pandas as pd
 
+LIBS = ("numpy", "pandas", "scikit-learn", "scipy")
+
+
+def environment() -> dict:
+    """Versions of the numerical libraries whose algorithms the pinned outputs depend on."""
+    from importlib.metadata import version
+
+    return {lib: version(lib) for lib in LIBS}
+
 
 def plain(x):
     """Recursively convert results to JSON-compatible python values."""
