@@ -1,0 +1,53 @@
+[project]
+name = "memetrics"
+version = "0.1.0"
+description = "Measure memetic claims (units, fidelity, content fitness, selection, tree-likeness, non-redundancy) on social-media data"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Somewhere Systems" }]
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pyarrow>=14",
+  "scipy>=1.11",
+  "scikit-learn>=1.3",
+  "rapidfuzz>=3.5",
+]
+
+[project.optional-dependencies]
+image = ["torch", "open_clip_torch", "imagehash", "pillow", "hdbscan"]
+text = ["sentence-transformers", "hdbscan"]
+bluesky = ["websockets>=12", "zstandard"]
+onchain = ["imagehash", "pillow"]
+all = ["memetrics[image,text,bluesky,onchain]"]
+
+[project.scripts]
+memetrics = "memetrics.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memetrics"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long-running simulation tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E741", "B905", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B"]
