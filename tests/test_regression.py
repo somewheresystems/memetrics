@@ -16,7 +16,7 @@ GOLDEN = json.loads((pathlib.Path(__file__).parent / "regression" / "golden.json
 SAME_ENV = environment() == GOLDEN["_env"]
 
 
-def _close(a, b, path="", rtol=1e-7, atol=1e-10):
+def _close(a, b, path="", rtol=1e-5, atol=1e-9):  # allows BLAS and OS floating-point noise
     if isinstance(b, dict):
         assert isinstance(a, dict) and set(a) == set(b), f"{path}: keys {sorted(a)} != {sorted(b)}"
         for k in b:
