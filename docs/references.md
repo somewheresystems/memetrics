@@ -1,0 +1,60 @@
+# References
+
+Every entry is copied from the verified bibliography of the accompanying study.
+
+- Acerbi, A. (2019). *Cultural Evolution in the Digital Age*. Oxford University Press. doi:10.1093/oso/9780198835943.001.0001
+- Acerbi, A., & Bentley, R. A. (2014). Biases in cultural transmission shape the turnover of popular traits. *Evolution and Human Behavior*, 35, 228–236. doi:10.1016/j.evolhumbehav.2014.02.003
+- Acerbi, A., & Tehrani, J. J. (2018). Did Einstein really say that? Testing content versus context in the cultural selection of quotations. *Journal of Cognition and Culture*, 18, 293–311. doi:10.1163/15685373-12340032
+- Adamic, L. A., Lento, T. M., Adar, E., & Ng, P. C. (2016). Information evolution in social networks. *Proceedings of WSDM 2016*, 473–482. doi:10.1145/2835776.2835827
+- Atran, S. (2001). The trouble with memes: Inference versus imitation in cultural creation. *Human Nature*, 12, 351–381. doi:10.1007/s12110-001-1003-0
+- Aunger, R. (Ed.) (2000). *Darwinizing Culture: The Status of Memetics as a Science*. Oxford University Press. doi:10.1093/acprof:oso/9780192632449.001.0001
+- Bakshy, E., Hofman, J. M., Mason, W. A., & Watts, D. J. (2011). Everyone's an influencer: Quantifying influence on Twitter. *Proceedings of WSDM 2011*, 65–74. doi:10.1145/1935826.1935845
+- Bartlett, F. C. (1995). *Remembering: A Study in Experimental and Social Psychology*. Cambridge University Press. doi:10.1017/cbo9780511759185
+- Bentley, R. A., Hahn, M. W., & Shennan, S. J. (2004). Random drift and culture change. *Proceedings of the Royal Society B*, 271, 1443–1450. doi:10.1098/rspb.2004.2746
+- Bentley, R. A., Lipo, C. P., Herzog, H. A., & Hahn, M. W. (2007). Regular rates of popular culture change reflect random copying. *Evolution and Human Behavior*, 28, 151–158. doi:10.1016/j.evolhumbehav.2006.10.002
+- Berger, J., & Milkman, K. L. (2012). What makes online content viral? *Journal of Marketing Research*, 49, 192–205. doi:10.1509/jmr.10.0353
+- Blackmore, S. (1999). *The Meme Machine*. Oxford University Press.
+- Blackmore, S. (2009). Memetics does provide a useful way of understanding cultural evolution. In *Contemporary Debates in Philosophy of Biology* (pp. 255–272). Wiley. doi:10.1002/9781444314922.ch15
+- Boyd, R., & Richerson, P. J. (1985). *Culture and the Evolutionary Process*. University of Chicago Press.
+- Cavalli-Sforza, L. L., & Feldman, M. W. (1981). *Cultural Transmission and Evolution: A Quantitative Approach*. Princeton University Press. doi:10.1515/9780691209357
+- Centola, D., & Macy, M. (2007). Complex contagions and the weakness of long ties. *American Journal of Sociology*, 113, 702–734. doi:10.1086/521848
+- Cheng, J., Adamic, L., Dow, P. A., Kleinberg, J. M., & Leskovec, J. (2014). Can cascades be predicted? *Proceedings of WWW 2014*, 925–936. doi:10.1145/2566486.2567997
+- Claidière, N., & Sperber, D. (2007). The role of attraction in cultural evolution. *Journal of Cognition and Culture*, 7, 89–111. doi:10.1163/156853707x171829
+- Claidière, N., Scott-Phillips, T. C., & Sperber, D. (2014). How Darwinian is cultural evolution? *Philosophical Transactions of the Royal Society B*, 369, 20130368. doi:10.1098/rstb.2013.0368
+- Collard, M., Shennan, S. J., & Tehrani, J. J. (2006). Branching, blending, and the evolution of cultural similarities and differences among human populations. *Evolution and Human Behavior*, 27, 169–184. doi:10.1016/j.evolhumbehav.2005.07.003
+- Crema, E. R., Kandler, A., & Shennan, S. (2016). Revealing patterns of cultural transmission from frequency data: Equilibrium and non-equilibrium assumptions. *Scientific Reports*, 6, 39122. doi:10.1038/srep39122
+- Dawkins, R. (1976). *The Selfish Gene*. Oxford University Press.
+- Dennett, D. C. (1995). *Darwin's Dangerous Idea: Evolution and the Meanings of Life*. Simon & Schuster.
+- Edmonds, B. (2005). The revealed poverty of the gene-meme analogy: Why memetics per se has failed to produce substantive results. *Journal of Memetics*, 9. http://cfpm.org/jom-emit/2005/vol9/edmonds_b.html
+- Feder, A. F., Kryazhimskiy, S., & Plotkin, J. B. (2014). Identifying signatures of selection in genetic time series. *Genetics*, 196, 509–522. doi:10.1534/genetics.113.158220
+- Gleeson, J. P., Ward, J. A., O'Sullivan, K. P., & Lee, W. T. (2014). Competition-induced criticality in a model of meme popularity. *Physical Review Letters*, 112, 048701. doi:10.1103/physrevlett.112.048701
+- Goel, S., Anderson, A., Hofman, J., & Watts, D. J. (2016). The structural virality of online diffusion. *Management Science*, 62, 180–196. doi:10.1287/mnsc.2015.2158
+- Gray, R. D., Bryant, D., & Greenhill, S. J. (2010). On the shape and fabric of human history. *Philosophical Transactions of the Royal Society B*, 365, 3923–3933. doi:10.1098/rstb.2010.0162
+- Hahn, M. W., & Bentley, R. A. (2003). Drift as a mechanism for cultural change: An example from baby names. *Proceedings of the Royal Society B*, 270. doi:10.1098/rsbl.2003.0045
+- Holland, B. R., Huber, K. T., Dress, A., & Moulton, V. (2002). δ plots: A tool for analyzing phylogenetic distance data. *Molecular Biology and Evolution*, 19, 2051–2059. doi:10.1093/oxfordjournals.molbev.a004030
+- Howe, C. J., & Windram, H. F. (2011). Phylomemetics: Evolutionary analysis beyond the gene. *PLoS Biology*, 9, e1001069. doi:10.1371/journal.pbio.1001069
+- Kandler, A., & Shennan, S. (2013). A non-equilibrium neutral model for analysing cultural change. *Journal of Theoretical Biology*, 330, 18–25. doi:10.1016/j.jtbi.2013.03.006
+- Karjus, A., Blythe, R. A., Kirby, S., & Smith, K. (2020). Challenges in detecting evolutionary forces in language change using diachronic corpora. *Glossa*, 5. doi:10.5334/gjgl.909
+- Kashima, Y. (2000). Maintaining cultural stereotypes in the serial reproduction of narratives. *Personality and Social Psychology Bulletin*, 26, 594–604. doi:10.1177/0146167200267007
+- Kirby, S., Cornish, H., & Smith, K. (2008). Cumulative cultural evolution in the laboratory. *PNAS*, 105, 10681–10686. doi:10.1073/pnas.0707835105
+- Lakkaraju, H., McAuley, J., & Leskovec, J. (2013). What's in a name? Understanding the interplay between titles, content, and communities in social media. *Proceedings of ICWSM*, 7, 311–320. doi:10.1609/icwsm.v7i1.14408
+- Lerique, S., & Roth, C. (2018). The semantic drift of quotations in blogspace: A case study in short-term cultural evolution. *Cognitive Science*, 42, 188–219. doi:10.1111/cogs.12494
+- Leskovec, J., Backstrom, L., & Kleinberg, J. (2009). Meme-tracking and the dynamics of the news cycle. *Proceedings of KDD 2009*, 497–506. doi:10.1145/1557019.1557077
+- Martin, T., Hofman, J. M., Sharma, A., Anderson, A., & Watts, D. J. (2016). Exploring limits to prediction in complex social systems. *Proceedings of WWW 2016*, 683–694. doi:10.1145/2872427.2883001
+- Mesoudi, A., & Whiten, A. (2008). The multiple roles of cultural transmission experiments in understanding human cultural evolution. *Philosophical Transactions of the Royal Society B*, 363, 3489–3501. doi:10.1098/rstb.2008.0129
+- Mongardini, A. M., & Mei, A. (2025). A midsummer meme's dream: Investigating market manipulations in the meme coin ecosystem. arXiv:2507.01963
+- Morin, O. (2016). *How Traditions Live and Die*. Oxford University Press.
+- Newberry, M. G., Ahern, C. A., Clark, R., & Plotkin, J. B. (2017). Detecting evolutionary forces in language change. *Nature*, 551, 223–226. doi:10.1038/nature24455
+- O'Dwyer, J. P., & Kandler, A. (2017). Inferring processes of cultural transmission: The critical role of rare variants in distinguishing neutrality from novelty biases. *Philosophical Transactions of the Royal Society B*, 372, 20160426. doi:10.1098/rstb.2016.0426
+- Salganik, M. J., Dodds, P. S., & Watts, D. J. (2006). Experimental study of inequality and unpredictability in an artificial cultural market. *Science*, 311, 854–856. doi:10.1126/science.1121066
+- Shifman, L. (2013). Memes in a digital world: Reconciling with a conceptual troublemaker. *Journal of Computer-Mediated Communication*, 18, 362–377. doi:10.1111/jcc4.12013
+- Shifman, L. (2014). *Memes in Digital Culture*. MIT Press. doi:10.7551/mitpress/9429.001.0001
+- Simmons, M., Adamic, L., & Adar, E. (2011). Memes online: Extracted, subtracted, injected, and recollected. *Proceedings of ICWSM*, 5, 353–360. doi:10.1609/icwsm.v5i1.14120
+- Sperber, D. (1996). *Explaining Culture: A Naturalistic Approach*. Blackwell.
+- Sperber, D. (2000). An objection to the memetic approach to culture. In R. Aunger (Ed.), *Darwinizing Culture* (pp. 163–173). Oxford University Press. doi:10.1093/acprof:oso/9780192632449.003.0008
+- Stubbersfield, J. M., Tehrani, J. J., & Flynn, E. G. (2015). Serial killers, spiders and cybersex: Social and survival information bias in the transmission of urban legends. *British Journal of Psychology*, 106, 288–307. doi:10.1111/bjop.12073
+- Szwajcok, N., Tsuchiya, T., Liu, E., Soska, K., Payer, M., & Christin, N. (2026). Meme coin factories: Uncovering large-scale manipulations on pump.fun. arXiv:2609.10246
+- Tan, C., Lee, L., & Pang, B. (2014). The effect of wording on message propagation: Topic- and author-controlled natural experiments on Twitter. *Proceedings of ACL 2014*, 175–185. doi:10.3115/v1/p14-1017
+- Tehrani, J. J. (2013). The phylogeny of Little Red Riding Hood. *PLoS ONE*, 8, e78871. doi:10.1371/journal.pone.0078871
+- Weng, L., Flammini, A., Vespignani, A., & Menczer, F. (2012). Competition among memes in a world with limited attention. *Scientific Reports*, 2, 335. doi:10.1038/srep00335
+- Wimsatt, W. C. (2009). Memetics does not provide a useful way of understanding cultural evolution: A developmental perspective. In *Contemporary Debates in Philosophy of Biology* (pp. 273–291). Wiley. doi:10.1002/9781444314922.ch16
