@@ -49,3 +49,12 @@ def test_turnover_conformity_lowers_exponent():
     xc = turnover_exponent(turnover_profile(neutral_innovation(2000, 0.02, 60, burn=100, conformity=0.3, seed=1)))
     assert 0.5 < xn < 1.3
     assert xc != xn
+
+
+def test_fit_null_defined_for_bins_closer_than_one_generation():
+    t = np.arange(12) * 0.3
+    sim = wf_sampled(0.3, t, np.full(12, 400), 1000, 0.0, reps=50, seed=0)
+    assert not np.isnan([fit_test(s, t)[1] for s in sim]).any()
+    d = pd.DataFrame({"t": t, "n": 400, "count": (sim[0] * 400).astype(int)})
+    r = fit_calibrated([d] * 5, Ne_grid=(1000,), reps=20, n_sets=50, s_grid=(0.05,))
+    assert r.detail["null"][1000]["testable"] == 1.0

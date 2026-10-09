@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -31,13 +29,16 @@ from .result import Result
 
 def fit_test(x: np.ndarray, t: np.ndarray) -> tuple[float, float, int]:
     """Frequency Increment Test on one trajectory. ``x`` frequencies (strictly inside (0, 1) are used), ``t`` times.
-    Returns (t statistic, two-sided p, number of increments). NaN p if fewer than 2 increments."""
+    Returns (t statistic, two-sided p, number of increments). NaN p if fewer than 2 increments or if two kept
+    sampling times coincide (dt = 0, the rescaled increment is undefined)."""
     x, t = np.asarray(x, float), np.asarray(t, float)
     keep = (x > 0) & (x < 1)
     x, t = x[keep], t[keep]
     if len(x) < 3:
         return np.nan, np.nan, max(len(x) - 1, 0)
     dt = np.diff(t)
+    if np.any(dt <= 0):
+        return np.nan, np.nan, len(dt)
     y = np.diff(x) / np.sqrt(2 * x[:-1] * (1 - x[:-1]) * dt)
     if np.allclose(y.std(ddof=1), 0):
         return np.nan, np.nan, len(y)
@@ -78,21 +79,37 @@ def wf_sampled(
     x0: float, gens: np.ndarray, n_sample: np.ndarray, Ne: float, s: float = 0.0, reps: int = 200, seed: int = 0
 ) -> np.ndarray:
     """Wright-Fisher trajectories (haploid, selection coefficient s per generation) started at x0, sampled
-    binomially with ``n_sample[i]`` at generation ``gens[i]`` (sorted, gens[0] = 0). Returns (reps, len(gens))
-    sample frequencies."""
+    binomially with ``n_sample[i]`` at time ``gens[i]`` (in generations, non-decreasing, gens[0] = 0). Returns
+    (reps, len(gens)) sample frequencies.
+
+    Sampling times need not be whole generations. An interval of ``dt`` generations is simulated as
+    ``k = ceil(dt)`` Wright-Fisher steps of population ``round(Ne * k / dt)`` and selection ``s * dt / k`` per
+    step, which keeps the drift variance (dt x(1 - x) / Ne) and the total selection of the interval; whole-generation
+    intervals reduce to the standard model. Bins closer than one generation therefore get proportionally less drift
+    (none if dt = 0) instead of being rounded onto the same generation."""
     rng = np.random.default_rng(seed)
-    gens = np.asarray(np.round(gens), int)
+    gens = np.asarray(gens, float)
     N = int(max(Ne, 2))
     p = np.full(reps, float(x0))
     out = np.empty((reps, len(gens)))
-    g = 0
+    prev = gens[0] if len(gens) else 0.0
     for i, G in enumerate(gens):
-        while g < G:
-            ps = p * (1 + s) / (p * (1 + s) + (1 - p))
-            p = rng.binomial(N, ps) / N
-            g += 1
+        dt = float(G - prev)
+        prev = G
+        if dt > 1e-12:
+            k = int(np.ceil(dt - 1e-9))
+            Nk, sk = int(max(round(N * k / dt), 2)), s * dt / k
+            for _ in range(k):
+                ps = p * (1 + sk) / (p * (1 + sk) + (1 - p))
+                p = rng.binomial(Nk, ps) / Nk
         out[:, i] = rng.binomial(int(n_sample[i]), p) / n_sample[i]
     return out
+
+
+def _share_nonnan(p: np.ndarray, q: float) -> float:
+    """BH rejection share among the trajectories with a defined p-value (NaN rows excluded from the denominator)."""
+    ok = ~np.isnan(p)
+    return float(bh(p[ok], q).mean()) if ok.any() else np.nan
 
 
 def fit_calibrated(
@@ -110,61 +127,64 @@ def fit_calibrated(
 
     ``trajs``: list of per-bin tables with columns t (time), n (pool sample size), count (unit count). Time is
     converted to generations by dividing by ``gen_unit``. For each trajectory and N_e, ``reps`` neutral replicates
-    are simulated with the observed x0, bin times and sample sizes; the null distribution of the BH rejection share
-    is built from ``n_sets`` random draws of one replicate per trajectory.
+    are simulated with the observed x0, bin times and sample sizes (:func:`wf_sampled`, which handles bins closer
+    than one generation) and tested with the FIT on exactly the same times as the observed trajectory; the null
+    distribution of the BH rejection share is built from ``n_sets`` random draws of one replicate per trajectory.
+
+    Rates are computed among trajectories with a defined FIT p-value (a replicate that is lost or fixed and keeps
+    fewer than three interior frequencies has no p-value and is excluded, as it would be from the observed set):
+    ``fpr_raw`` and ``power_p05`` are shares of p < 0.05 among defined p-values, null BH shares are rejections over
+    defined p-values in each draw; ``testable`` and ``power_testable`` give the share of replicates with a defined
+    p-value. Power uses the same start frequency as the null (observed x0 clipped to [1/(2n), 1 - 1/(2n)]).
 
     verdict: "selection beyond drift" if the observed BH share (FDR ``fdr``) exceeds the null 97.5th percentile for
     every N_e; "drift-compatible" if inside the central 95% for some N_e; else "ambiguous".
-
-    Null trajectories are simulated at whole generations ``round((t - t0) / gen_unit)``. If two bins round to the
-    same generation the null FIT increments are undefined (dt = 0) and those null p-values are NaN; a warning is
-    raised. Choose ``gen_unit`` no larger than the smallest bin spacing.
     """
     q = fdr
     rng = np.random.default_rng(seed)
-    collide = sum(np.any(np.diff(np.round((d.t.to_numpy() - d.t.iloc[0]) / gen_unit)) == 0) for d in trajs)
-    if collide:
-        warnings.warn(
-            f"{collide} of {len(trajs)} trajectories have bins closer than one generation (gen_unit="
-            f"{gen_unit}); their null FIT p-values are NaN, which deflates the null rejection share",
-            stacklevel=2,
-        )
-    obs_p = []
-    for d in trajs:
-        obs_p.append(fit_test(d["count"] / d["n"], d.t / gen_unit)[1])
-    obs_p = np.array(obs_p)
+    times = [np.asarray(d.t, float) / gen_unit for d in trajs]
+    gens = [tt - tt[0] for tt in times]
+    x0s = [
+        float(np.clip(d["count"].iloc[0] / d.n.iloc[0], 1 / (2 * d.n.iloc[0]), 1 - 1 / (2 * d.n.iloc[0])))
+        for d in trajs
+    ]
+    obs_p = np.array([fit_test(d["count"] / d["n"], tt)[1] for d, tt in zip(trajs, times)])
     valid = ~np.isnan(obs_p)
     obs_share = float(bh(obs_p[valid], q).mean()) if valid.any() else np.nan
     raw_share = float((obs_p[valid] < 0.05).mean()) if valid.any() else np.nan
     null = {}
     power = {}
+    testable = {}
     for Ne in Ne_grid:
         P = np.full((len(trajs), reps), np.nan)
         for i, d in enumerate(trajs):
             if not valid[i]:
                 continue
-            g = np.round((d.t.to_numpy() - d.t.iloc[0]) / gen_unit)
-            x0 = float(np.clip(d["count"].iloc[0] / d.n.iloc[0], 1 / (2 * d.n.iloc[0]), 1 - 1 / (2 * d.n.iloc[0])))
-            sim = wf_sampled(x0, g, d.n.to_numpy(), Ne, 0.0, reps, seed + i)
-            P[i] = [fit_test(sim[r], g)[1] for r in range(reps)]
+            sim = wf_sampled(x0s[i], gens[i], d.n.to_numpy(), Ne, 0.0, reps, seed + i)
+            P[i] = [fit_test(sim[r], times[i])[1] for r in range(reps)]
         Pv = P[valid]
-        shares = np.array([bh(Pv[np.arange(len(Pv)), rng.integers(0, reps, len(Pv))], q).mean() for _ in range(n_sets)])
+        ok = ~np.isnan(Pv)
+        shares = np.array(
+            [_share_nonnan(Pv[np.arange(len(Pv)), rng.integers(0, reps, len(Pv))], q) for _ in range(n_sets)]
+        )
         null[Ne] = {
-            "fpr_raw": float(np.nanmean(Pv < 0.05)),
-            "bh_share_q025": float(np.quantile(shares, 0.025)),
-            "bh_share_q975": float(np.quantile(shares, 0.975)),
-            "bh_share_mean": float(shares.mean()),
+            "fpr_raw": float((Pv[ok] < 0.05).mean()) if ok.any() else np.nan,
+            "testable": float(ok.mean()) if Pv.size else np.nan,
+            "bh_share_q025": float(np.nanquantile(shares, 0.025)),
+            "bh_share_q975": float(np.nanquantile(shares, 0.975)),
+            "bh_share_mean": float(np.nanmean(shares)),
         }
         for s in s_grid:
             pw = []
             for i, d in enumerate(trajs):
                 if not valid[i]:
                     continue
-                g = np.round((d.t.to_numpy() - d.t.iloc[0]) / gen_unit)
-                x0 = float(np.clip(d["count"].iloc[0] / d.n.iloc[0], 0.01, 0.99))
-                sim = wf_sampled(x0, g, d.n.to_numpy(), Ne, s, 20, seed + 7919 + i)
-                pw += [fit_test(sim[r], g)[1] for r in range(20)]
-            power[(Ne, s)] = float(np.nanmean(np.array(pw) < 0.05))
+                sim = wf_sampled(x0s[i], gens[i], d.n.to_numpy(), Ne, s, 20, seed + 7919 + i)
+                pw += [fit_test(sim[r], times[i])[1] for r in range(20)]
+            pw = np.array(pw, float)
+            ok_pw = ~np.isnan(pw)
+            power[(Ne, s)] = float((pw[ok_pw] < 0.05).mean()) if ok_pw.any() else np.nan
+            testable[(Ne, s)] = float(ok_pw.mean()) if len(pw) else np.nan
     above = all(obs_share > null[N]["bh_share_q975"] for N in Ne_grid)
     inside = any(null[N]["bh_share_q025"] <= obs_share <= null[N]["bh_share_q975"] for N in Ne_grid)
     verdict = "selection beyond drift" if above else "drift-compatible" if inside else "ambiguous"
@@ -178,6 +198,7 @@ def fit_calibrated(
             "raw_share_p05": raw_share,
             "null": null,
             "power_p05": {f"Ne={k[0]},s={k[1]}": v for k, v in power.items()},
+            "power_testable": {f"Ne={k[0]},s={k[1]}": v for k, v in testable.items()},
             "p_values": obs_p.tolist(),
         },
         verdict,

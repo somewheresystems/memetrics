@@ -36,14 +36,15 @@ with the nominal 5%. Keyword: `fdr`.
   simulations subsampled to the observed step sizes give the null interval of `x`. Below it suggests conformity
   or popularity bias; above it, novelty or anti-conformity bias.
 
-## Known issue: bins closer than one generation
+## Bins closer than one generation
 
-`fit_calibrated` simulates the null at whole generations, `round((t - t0) / gen_unit)`. If two bins round to the
-same generation, the null increment has `dt = 0` and that null p-value is NaN; NaN never counts as a rejection, so
-the null rejection share is deflated and any observed rejection can look like "selection beyond drift". The
-observed test itself uses unrounded times. The function now warns when this happens. The scorecard sets `gen_unit`
-to the 5th percentile of observed bin spacing (at most one day) to avoid it. If you call `fit_calibrated`
-directly, choose `gen_unit` no larger than your smallest bin spacing.
+Up to 0.1.0 the null was simulated at whole generations, `round((t - t0) / gen_unit)`, and tested on those rounded
+times. Bins that rounded to the same generation gave a null increment with `dt = 0` and a NaN p-value, NaN counted
+as a non-rejection, and the null rejection share and power were deflated. Now `wf_sampled` accepts fractional
+generations (an interval of `dt` generations gets drift variance `dt x(1 - x) / N_e`), the null and power
+replicates are tested on exactly the observed times, and rates are computed among replicates with a defined
+p-value (`testable` and `power_testable` report that share). The scorecard still sets `gen_unit` to the 5th
+percentile of observed bin spacing (at most one day).
 
 ## Limits
 
